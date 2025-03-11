@@ -16,3 +16,6 @@ __pycache__/
 logs/
 OCR_Consertis.png
 .gitignore
+
+#Graphics folder
+graphics/
