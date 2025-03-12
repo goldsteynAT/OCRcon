@@ -14,5 +14,8 @@ __pycache__/
 
 #Log-Folder
 logs/
-OCR_Consertis.png
 .gitignore
+
+*.png
+*.gif
+*.mp4
