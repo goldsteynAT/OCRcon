@@ -1,1 +1,3 @@
-![OCR_Consertis](https://github.com/user-attachments/assets/99febb32-6cd6-4ba9-898c-29fee61a5833)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/19260368-3693-41f0-a971-f69b7bc60aa0" alt="OCRcon GIF">
+</p>
