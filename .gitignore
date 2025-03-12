@@ -24,3 +24,5 @@ logs/
 *.png
 *.gif
 *.mp4
+*.json
+logs/ocr_status.json
