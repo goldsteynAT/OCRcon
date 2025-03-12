@@ -1,0 +1,353 @@
+# __init__.py #
+
+
+# gui.py #
+import threading
+import tkinter as tk
+from tkinter import scrolledtext
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
+import sys
+import time
+from ocr_processing import batch_ocr_pdfs
+from tkinter import filedialog
+
+
+# Redirect stdout to a Text widget
+class RedirectText:
+    def __init__(self, text_widget):
+        self.text_widget = text_widget
+    def write(self, s):
+        self.text_widget.insert(tk.END, s)
+        self.text_widget.see(tk.END)
+    def flush(self):
+        pass
+
+class OCRGUI(ttk.Window):
+    def __init__(self):
+        super().__init__(themename="litera")
+        self.title("OCR Consertis - Desktop Application")
+        self.geometry("800x600")
+
+        # Folder selection buttons and labels
+        self.folder_frame = ttk.Frame(self)
+        self.folder_frame.pack(pady=10)
+
+        self.select_input_button = ttk.Button(self.folder_frame, text="Select Input Folder", command=self.select_input)
+        self.select_output_button = ttk.Button(self.folder_frame, text="Select Output Folder", command=self.select_output)
+
+        self.input_label = ttk.Label(self.folder_frame, text="Input Folder: Not selected")
+        self.output_label = ttk.Label(self.folder_frame, text="Output Folder: Not selected")
+
+        # Layout for folder selection
+        self.select_input_button.pack(side=tk.LEFT, padx=5)
+        self.select_output_button.pack(side=tk.LEFT, padx=5)
+        self.input_label.pack(side=tk.LEFT, padx=5)
+        self.output_label.pack(side=tk.LEFT, padx=5)
+
+
+        # Create UI elements
+        self.control_frame = ttk.Frame(self)
+        self.control_frame.pack(pady=10)
+        self.start_button = ttk.Button(self.control_frame, text="Start OCR", command=self.start_ocr)
+        self.pause_button = ttk.Button(self.control_frame, text="Pause", command=self.pause_ocr, state=DISABLED)
+        self.resume_button = ttk.Button(self.control_frame, text="Resume", command=self.resume_ocr, state=DISABLED)
+        self.progress = ttk.Progressbar(self, length=600, mode='determinate')
+        self.log_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, height=15)
+
+        # Layout UI elements
+        self.start_button.pack(in_=self.control_frame, side=tk.LEFT, padx=5)
+        self.pause_button.pack(in_=self.control_frame, side=tk.LEFT, padx=5)
+        self.resume_button.pack(in_=self.control_frame, side=tk.LEFT, padx=5)
+        self.progress.pack(pady=10)
+        self.log_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Redirect stdout/stderr to the log_text widget
+        sys.stdout = RedirectText(self.log_text)
+        sys.stderr = RedirectText(self.log_text)
+
+        # OCR processing thread and control variables
+        self.ocr_thread = None
+        self.running = False
+        self.paused = False
+
+    def start_ocr(self):
+        if not self.running:
+            self.running = True
+            self.start_button.config(state=DISABLED)
+            self.pause_button.config(state=NORMAL)
+            self.resume_button.config(state=DISABLED)
+            # Start OCR processing in a background thread
+            self.ocr_thread = threading.Thread(target=self.run_ocr)
+            self.ocr_thread.start()
+            self.update_progress_bar()
+
+    def run_ocr(self):
+        # Check if both input and output folders have been selected
+        if not hasattr(self, "input_folder") or not self.input_folder or not hasattr(self, "output_folder") or not self.output_folder:
+            print("Please select both input and output folders before starting OCR.\n")
+            self.running = False
+            self.start_button.config(state=NORMAL)
+            self.pause_button.config(state=DISABLED)
+            self.resume_button.config(state=DISABLED)
+            return
+
+        # Call the batch OCR process using user-selected folders
+        batch_ocr_pdfs(
+            input_dir=self.input_folder,
+            output_dir=self.output_folder,
+            use_gpu=False,
+            language="deu+eng",
+            deskew=True,
+            jobs=4
+        )
+        self.running = False
+        self.start_button.config(state=NORMAL)
+        self.pause_button.config(state=DISABLED)
+        self.resume_button.config(state=DISABLED)
+
+
+
+    def pause_ocr(self):
+        # For simplicity, we simulate a pause by setting a flag
+        self.paused = True
+        self.pause_button.config(state=DISABLED)
+        self.resume_button.config(state=NORMAL)
+        print("OCR processing paused.\n")
+
+    def resume_ocr(self):
+        self.paused = False
+        self.pause_button.config(state=NORMAL)
+        self.resume_button.config(state=DISABLED)
+        print("OCR processing resumed.\n")
+
+    def update_progress_bar(self):
+        # Dummy progress update: In a real implementation, you might poll shared status updates.
+        if self.running:
+            current = self.progress['value']
+            # Only update if not paused
+            if not self.paused and current < 100:
+                self.progress['value'] = current + 1
+            self.after(1000, self.update_progress_bar)
+        else:
+            self.progress['value'] = 100
+    
+    def select_input(self):
+        folder = filedialog.askdirectory(title="Select Input Folder")
+        if folder:
+            self.input_folder = folder
+            self.input_label.config(text=f"Input Folder: {folder}")
+            sys.__stdout__.write(f"User selected {folder} as input folder.\n")
+
+    def select_output(self):
+        folder = filedialog.askdirectory(title="Select Output Folder")
+        if folder:
+            self.output_folder = folder
+            self.output_label.config(text=f"Output Folder: {folder}")
+            sys.__stdout__.write(f"User selected {folder} as output folder.\n")
+
+
+
+if __name__ == "__main__":
+    app = OCRGUI()
+    app.mainloop()
+
+
+# main.py #
+
+
+from gui import OCRGUI
+
+if __name__ == "__main__":
+    app = OCRGUI()
+    app.mainloop()
+
+
+# ocr_processing.py #
+import os
+import ocrmypdf
+
+def apply_ocr_to_pdf(input_pdf: str, output_pdf: str, use_gpu: bool = False, language: str = "deu+eng", deskew: bool = True, jobs: int = 1) -> None:
+    """
+    Applies OCR to a PDF file using ocrmypdf and generates a searchable PDF.
+    
+    Args:
+        input_pdf (str): Normalized path to the input PDF file.
+        output_pdf (str): Path where the OCR-processed PDF should be saved.
+        use_gpu (bool): Whether to use GPU acceleration if available.
+        language (str): OCR languages (e.g., "deu+eng").
+        deskew (bool): Whether to apply deskewing.
+        jobs (int): Number of parallel jobs to use internally in ocrmypdf.
+    """
+    try:
+        if use_gpu:
+            ocrmypdf.ocr(
+                input_pdf,
+                output_pdf,
+                language=language,
+                force_ocr=True,
+                deskew=deskew,
+                jobs=jobs
+            )
+        else:
+            ocrmypdf.ocr(
+                input_pdf,
+                output_pdf,
+                language=language,
+                skip_text=True,
+                deskew=deskew,
+                jobs=jobs
+            )
+        print(f"✅ OCR applied: {input_pdf} -> {output_pdf}")
+    except Exception as e:
+        print(f"❌ Error processing {input_pdf}: {e}")
+
+def batch_ocr_pdfs(input_dir: str, output_dir: str, use_gpu: bool = False, language: str = "deu+eng", deskew: bool = True, jobs: int = 1, status_file: str = None) -> None:
+    """
+    Processes all PDFs in the input_dir, applies OCR, and saves them in the output_dir.
+    The directory structure is preserved. Supports pause/resume functionality by saving the processing
+    status to a JSON file.
+    
+    Args:
+        input_dir (str): Directory containing PDFs to process.
+        output_dir (str): Directory to save OCR-processed PDFs.
+        use_gpu (bool): Whether to use GPU acceleration if available.
+        language (str): OCR languages (e.g., "deu+eng").
+        deskew (bool): Whether to apply deskewing.
+        jobs (int): Number of parallel jobs to use internally in ocrmypdf.
+        status_file (str): Path to the status file (if None, defaults to 'ocr_status.json' in output_dir).
+    """
+    from status_manager import load_status, save_status
+    from progress_display import display_progress
+
+    if status_file is None:
+    # Determine project root (assumes __file__ is in src/ocr_consertis, so go up three levels)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        logs_dir = os.path.join(project_root, "logs")
+        os.makedirs(logs_dir, exist_ok=True)  # Ensure the logs directory exists
+        status_file = os.path.join(logs_dir, "ocr_status.json")
+
+
+
+
+    
+    # Load previously processed PDFs (normalize paths)
+    processed = load_status(status_file)
+    initial_processed_count = len(processed)  # Save initial count
+
+    
+    # Gather all PDF files from input_dir and normalize them
+    pdf_files = []
+    for root, _, files in os.walk(input_dir):
+        for file in files:
+            if file.lower().endswith(".pdf"):
+                path = os.path.normpath(os.path.abspath(os.path.join(root, file)))
+                pdf_files.append(path)
+    total = len(pdf_files)
+    
+    try:
+        for idx, input_pdf in enumerate(pdf_files, start=1):
+            # Skip if already processed
+            if input_pdf in processed:
+                continue
+            
+            # Determine output file path preserving directory structure
+            relative_dir = os.path.relpath(os.path.dirname(input_pdf), os.path.abspath(input_dir))
+            target_dir = os.path.join(output_dir, relative_dir)
+            os.makedirs(target_dir, exist_ok=True)
+            output_pdf = os.path.join(target_dir, os.path.basename(input_pdf))
+            
+            # Update progress display
+            in_progress = input_pdf
+            next_items = [pdf for pdf in pdf_files if pdf not in processed and pdf != input_pdf]
+            display_progress(processed, in_progress, next_items, len(processed), total)
+            
+            # Process current PDF
+            apply_ocr_to_pdf(input_pdf, output_pdf, use_gpu=use_gpu, language=language, deskew=deskew, jobs=jobs)
+            
+            # Mark as completed and save status
+            processed.append(input_pdf)
+            save_status(status_file, processed)
+
+        if len(processed) == initial_processed_count:
+            print("All files in the folder are already processed.\n")
+
+    except KeyboardInterrupt:
+        print("\n⏸ Process interrupted. Saving current status...")
+        save_status(status_file, processed)
+        print("Status saved. You can resume processing later.")
+
+
+# progress_display.py #
+def display_progress(completed, current, next_items, current_index, total):
+    """
+    Displays overall progress and a status table in the console.
+    
+    Args:
+        completed (list): List of file paths that have been processed.
+        current (str): File path currently in progress.
+        next_items (list): List of file paths remaining.
+        current_index (int): Number of files processed so far.
+        total (int): Total number of files.
+    """
+    percent = (current_index / total) * 100 if total > 0 else 0
+    progress_bar_length = 20
+    filled_length = int(progress_bar_length * current_index // total) if total > 0 else 0
+    progress_bar = '[' + '#' * filled_length + ' ' * (progress_bar_length - filled_length) + ']'
+    
+    print("\n" + "=" * 60)
+    print(f"Overall Progress: {progress_bar} ({current_index} of {total} files, {percent:.1f}%)")
+    print("-" * 60)
+    print("Status Table:")
+    print("{:<15} | {}".format("Status", "File Path"))
+    print("-" * 60)
+    for file in completed:
+        print("{:<15} | {}".format("Completed", file))
+    if current:
+        print("{:<15} | {}".format("In Progress", current))
+    for file in next_items:
+        print("{:<15} | {}".format("Next", file))
+    print("=" * 60 + "\n")
+
+
+# status_manager.py #
+import json
+import os
+
+def load_status(status_file: str) -> list:
+    """
+    Loads the list of processed PDFs from a JSON status file.
+    
+    Args:
+        status_file (str): Path to the status file.
+    
+    Returns:
+        list: List of normalized processed PDF file paths.
+    """
+    if status_file and os.path.exists(status_file):
+        try:
+            with open(status_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    # Normalize each path
+                    return [os.path.normpath(os.path.abspath(p)) for p in data]
+        except Exception as e:
+            print(f"Error loading status file: {e}")
+    return []
+
+def save_status(status_file: str, processed: list) -> None:
+    """
+    Saves the list of processed PDFs to a JSON status file.
+    
+    Args:
+        status_file (str): Path to the status file.
+        processed (list): List of normalized processed PDF file paths.
+    """
+    try:
+        if status_file:
+            with open(status_file, 'w', encoding='utf-8') as f:
+                json.dump(processed, f, indent=4)
+    except Exception as e:
+        print(f"Error saving status file: {e}")
+
+

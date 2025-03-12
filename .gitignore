@@ -12,9 +12,14 @@ poetry.lock
 __pycache__/
 *.pyc
 
+#Graphics folder
+graphics/
+
+logs/all.txt
+logs/vzs.txt
+=======
 #Log-Folder
 logs/
-.gitignore
 
 *.png
 *.gif

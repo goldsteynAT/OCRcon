@@ -1,0 +1,21 @@
+OCR_Consertis/
+│   .gitignore
+│   README.md
+│   pyproject.toml
+│   ├───logs/
+│   │   #export_project.py
+│   │   all.txt
+│   │   ocr_status.json
+│   │   vzs.txt
+│   ├───src/
+│   │   ├───ocr_consertis/
+│   │   │   __init__.py
+│   │   │   gui.py
+│   │   │   main.py
+│   │   │   ocr_processing.py
+│   │   │   progress_display.py
+│   │   │   status_manager.py
+│   │   │   ├───__pycache__/
+│   │   │   │   gui.cpython-312.pyc
+│   ├───tests/
+│   │   __init__.py
