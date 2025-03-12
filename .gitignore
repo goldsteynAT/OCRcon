@@ -14,3 +14,6 @@ __pycache__/
 
 #Graphics folder
 graphics/
+
+logs/all.txt
+logs/vzs.txt

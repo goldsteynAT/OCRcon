@@ -56,9 +56,9 @@ class OCRGUI(ttk.Window):
         self.log_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, height=15)
 
         # Layout UI elements
-        self.start_button.pack(pady=10)
-        self.pause_button.pack(pady=5)
-        self.resume_button.pack(pady=5)
+        self.start_button.pack(in_=self.control_frame, side=tk.LEFT, padx=5)
+        self.pause_button.pack(in_=self.control_frame, side=tk.LEFT, padx=5)
+        self.resume_button.pack(in_=self.control_frame, side=tk.LEFT, padx=5)
         self.progress.pack(pady=10)
         self.log_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
