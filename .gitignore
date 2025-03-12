@@ -17,3 +17,10 @@ graphics/
 
 logs/all.txt
 logs/vzs.txt
+=======
+#Log-Folder
+logs/
+
+*.png
+*.gif
+*.mp4
