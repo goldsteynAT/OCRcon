@@ -12,10 +12,5 @@ poetry.lock
 __pycache__/
 *.pyc
 
-#Log-Folder
-logs/
-OCR_Consertis.png
-.gitignore
-
 #Graphics folder
 graphics/

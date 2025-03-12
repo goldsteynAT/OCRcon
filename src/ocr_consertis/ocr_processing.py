@@ -67,6 +67,8 @@ def batch_ocr_pdfs(input_dir: str, output_dir: str, use_gpu: bool = False, langu
     
     # Load previously processed PDFs (normalize paths)
     processed = load_status(status_file)
+    initial_processed_count = len(processed)  # Save initial count
+
     
     # Gather all PDF files from input_dir and normalize them
     pdf_files = []
@@ -100,6 +102,10 @@ def batch_ocr_pdfs(input_dir: str, output_dir: str, use_gpu: bool = False, langu
             # Mark as completed and save status
             processed.append(input_pdf)
             save_status(status_file, processed)
+
+        if len(processed) == initial_processed_count:
+            print("All files in the folder are already processed.\n")
+
     except KeyboardInterrupt:
         print("\n⏸ Process interrupted. Saving current status...")
         save_status(status_file, processed)
