@@ -21,60 +21,105 @@ class RedirectText:
 
 class OCRGUI(ttk.Window):
     def __init__(self):
-        super().__init__(themename="litera")
-        self.title("OCR Consertis - Desktop Application")
+        super().__init__(themename="flatly")
+        self.title("OCRcon - Control. Connect. Consertis.")
         self.geometry("800x600")
-        self.input_folders = []  # List to store multiple input folders
+        self.input_folders = []  # Liste für mehrere Input-Ordner
 
-        # Frame for input folder selection
-        self.input_frame = ttk.Frame(self)
-        self.input_frame.pack(pady=5, fill=tk.X, padx=10)
+        # Einheitliche Button-Schriftart setzen
+        style = ttk.Style()
+        style.configure('TButton', font=('Segoe UI Emoji', 10))
 
-        # Select Input Folder Button (Jetzt über dem Feld)
-        self.select_input_button = ttk.Button(self.input_frame, text="Select Input Folder", command=self.select_input)
-        self.select_input_button.pack(pady=5)
+        # Übergeordneter Frame für Quell- und Zielordner
+        self.folder_frame = ttk.Frame(self, borderwidth=1, relief="solid")
+        self.folder_frame.pack(fill=tk.X, padx=10, pady=10)
 
-        # Textfeld für ausgewählte Input-Folder (mehrere Zeilen)
-        self.input_text = scrolledtext.ScrolledText(self.input_frame, wrap=tk.WORD, height=5, width=60)
-        self.input_text.pack(side=tk.TOP, fill=tk.X)
+        # Quellordner Frame (mit Label, Box und Button)
+        self.input_frame = ttk.Frame(self.folder_frame)
+        self.input_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        # Frame for output folder selection
-        self.output_frame = ttk.Frame(self)
-        self.output_frame.pack(pady=5, fill=tk.X, padx=10)
+        self.input_label_desc = ttk.Label(self.input_frame, text="📂 Input Folders:", font=("Segoe UI Emoji", 12), anchor="w")
+        self.input_label_desc.pack(fill=tk.X, padx=5, pady=(5, 0))
 
-        # Select Output Folder Button (Jetzt über dem Label)
-        self.select_output_button = ttk.Button(self.output_frame, text="Select Output Folder", command=self.select_output)
-        self.select_output_button.pack(pady=5)
+        # Listbox mit Scrollbar einbetten
+        self.input_listbox_frame = ttk.Frame(self.input_frame)
+        self.input_listbox_frame.pack(fill=tk.X, padx=5, pady=(5, 0))
 
-        # Output Folder Label (Jetzt zentriert)
-        self.output_label = ttk.Label(self.output_frame, text="Output Folder: Not selected", anchor="center", justify="center")
-        self.output_label.pack(side=tk.TOP, fill=tk.X)
+        self.input_listbox = tk.Listbox(self.input_listbox_frame, height=5)
+        self.input_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # Control buttons (Start, Pause, Resume)
-        self.control_frame = ttk.Frame(self)
+        self.input_scrollbar = ttk.Scrollbar(self.input_listbox_frame, orient=tk.VERTICAL, command=self.input_listbox.yview)
+        self.input_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.input_listbox.config(yscrollcommand=self.input_scrollbar.set)
+
+        # Button-Frame für Add/Remove-Buttons, rechtsbündig
+        self.input_buttons_frame = ttk.Frame(self.input_frame)
+        self.input_buttons_frame.pack(fill=tk.X, padx=5, pady=5, anchor="e")
+
+        self.remove_input_button = ttk.Button(self.input_buttons_frame, text="➖ Remove Folder", command=self.remove_input)
+        self.remove_input_button.pack(side=tk.RIGHT, padx=5)
+
+        self.select_input_button = ttk.Button(self.input_buttons_frame, text="➕ Add Folder", command=self.select_input)
+        self.select_input_button.pack(side=tk.RIGHT, padx=5)
+
+        # Separator zwischen Quellordner und Zielordner
+        self.separator = ttk.Separator(self.folder_frame, orient="horizontal")
+        self.separator.pack(fill="x", padx=5, pady=5)
+
+
+        # Zielordner Frame (mit Label, Box und Button)
+        self.output_frame = ttk.Frame(self.folder_frame)
+        self.output_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        self.output_label_desc = ttk.Label(self.output_frame, text="📁 Zielordner:", font=("Segoe UI Emoji", 12), anchor="w")
+        self.output_label_desc.pack(fill=tk.X, padx=5, pady=(5, 0))
+
+        self.output_entry = ttk.Entry(self.output_frame, state="readonly")
+        self.output_entry.pack(fill=tk.X, padx=5, pady=(5, 0))
+
+        self.select_output_button = ttk.Button(self.output_frame, text="🔎 Durchsuchen", command=self.select_output)
+        self.select_output_button.pack(anchor="e", padx=5, pady=5)
+
+        # --- Steuerungselemente (Start, Pause, Resume) ---
+        self.control_frame = ttk.Frame(self, style="TFrame")
         self.control_frame.pack(pady=10)
 
-        self.start_button = ttk.Button(self.control_frame, text="Start OCR", command=self.start_ocr)
-        self.pause_button = ttk.Button(self.control_frame, text="Pause", command=self.pause_ocr, state=DISABLED)
-        self.resume_button = ttk.Button(self.control_frame, text="Resume", command=self.resume_ocr, state=DISABLED)
+        self.start_button = ttk.Button(self.control_frame, text="🚀 Start OCR", command=self.start_ocr)
+        self.pause_button = ttk.Button(self.control_frame, text="⏸️ Pause", command=self.pause_ocr, state=DISABLED)
+        self.resume_button = ttk.Button(self.control_frame, text="🔄 Fortsetzen", command=self.resume_ocr, state=DISABLED)
 
         self.start_button.pack(side=tk.LEFT, padx=5)
         self.pause_button.pack(side=tk.LEFT, padx=5)
         self.resume_button.pack(side=tk.LEFT, padx=5)
 
-        # Progress Bar
+        # Fortschrittsbalken
         self.progress = ttk.Progressbar(self, length=600, mode='determinate')
         self.progress.pack(pady=10)
 
-        # Log Output
-        self.log_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, height=15)
+        # Log-Ausgabe mit hellgrauem Hintergrund
+        # Frame für Log-Box mit separater Scrollbar
+        self.log_frame = ttk.Frame(self)
+        self.log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Log-Textfeld
+        self.log_text = tk.Text(self.log_frame, wrap=tk.WORD, height=15)
+        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Eigene Scrollbar für das Log-Textfeld
+        self.log_scrollbar = ttk.Scrollbar(self.log_frame, orient=tk.VERTICAL, command=self.log_text.yview)
+        self.log_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Verknüpfe das Textfeld mit der Scrollbar
+        self.log_text.config(yscrollcommand=self.log_scrollbar.set)
+
         self.log_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Redirect stdout/stderr to the log_text widget
+        # Umleitung von stdout/stderr auf das Log-Textfeld
         sys.stdout = RedirectText(self.log_text)
         sys.stderr = RedirectText(self.log_text)
 
-        # OCR processing thread and control variables
+        # OCR-Thread und Steuerungsvariablen
         self.ocr_thread = None
         self.running = False
         self.paused = False
@@ -139,16 +184,41 @@ class OCRGUI(ttk.Window):
         if folder:
             if folder not in self.input_folders:
                 self.input_folders.append(folder)
-                self.input_text.insert(tk.END, folder + "\n")  # Add folder to text area
-            sys.__stdout__.write(f"User selected {folder} as an input folder.\n")
+                self.input_listbox.insert(tk.END, folder)  # Ordner zur Listbox hinzufügen
+                message = f"Added folder: {folder}"
+                print(message)
+                sys.__stdout__.write(message)
+
+
+    def remove_input(self):
+        selected_indices = self.input_listbox.curselection()
+        if not selected_indices:
+            message = "No folder selected to remove."
+            print(message)
+            sys.__stdout__.write(message)
+            return
+        for index in reversed(selected_indices):  # von hinten nach vorne löschen
+            folder = self.input_listbox.get(index)
+            self.input_listbox.delete(index)
+            if folder in self.input_folders:
+                self.input_folders.remove(folder)
+            message = f"Removed folder: {folder}"
+            print(message)
+            sys.__stdout__.write(message)
+
+
+
 
     def select_output(self):
         folder = filedialog.askdirectory(title="Select Output Folder")
         if folder:
             self.output_folder = folder
-            self.output_label.config(text=f"Output Folder: {folder}")
+            # Aktualisiere die Entry-Box mit dem ausgewählten Ordner
+            self.output_entry.config(state="normal")
+            self.output_entry.delete(0, tk.END)
+            self.output_entry.insert(0, folder)
+            self.output_entry.config(state="readonly")
             sys.__stdout__.write(f"User selected {folder} as output folder.\n")
-
 
 if __name__ == "__main__":
     app = OCRGUI()
