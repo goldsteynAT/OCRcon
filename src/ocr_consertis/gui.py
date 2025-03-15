@@ -1,16 +1,13 @@
-# gui.py #
 import threading
 import tkinter as tk
 from tkinter import filedialog
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 import sys
-import time
 import os
 from ocr_processing import batch_ocr_pdfs
 from tkinterdnd2 import TkinterDnD, DND_FILES
 from PIL import Image, ImageTk
-
 
 # Redirect stdout to a Text widget
 class RedirectText:
@@ -48,7 +45,7 @@ class OCRGUI(TkinterDnD.Tk):
         image = Image.open(logo_path)
         original_width, original_height = image.size  # Originalgröße holen
 
-        scale_factor = 0.3  # Skalierungsfaktor (50% der Originalgröße)
+        scale_factor = 0.3  # Skalierungsfaktor (30% der Originalgröße)
         new_width = int(original_width * scale_factor)
         new_height = int(original_height * scale_factor)
 
@@ -58,8 +55,6 @@ class OCRGUI(TkinterDnD.Tk):
         # Label für das Logo zentriert platzieren
         self.logo_label = ttk.Label(self.logo_frame, image=self.logo_image)
         self.logo_label.pack(anchor="center")  # Mittig ausrichten
-
-
 
         # Übergeordneter Frame für Quell- und Zielordner
         self.folder_frame = ttk.Frame(self, borderwidth=1, relief="solid")
@@ -152,7 +147,9 @@ class OCRGUI(TkinterDnD.Tk):
         # OCR-Thread und Steuerungsvariablen
         self.ocr_thread = None
         self.running = False
-        self.paused = False
+        # Verwende ein threading.Event für Pause/Resume-Steuerung:
+        self.resume_event = threading.Event()
+        self.resume_event.set()  # Initial set – d.h. nicht pausiert
 
     def has_subfolder(self, folder):
         """Prüft, ob der Ordner mindestens einen Unterordner enthält."""
@@ -202,7 +199,6 @@ class OCRGUI(TkinterDnD.Tk):
             for entry in os.listdir(folder):
                 full_path = os.path.join(folder, entry)
                 if os.path.isdir(full_path):
-                    # Füge den Unterordner als Knoten ein, falls er noch nicht existiert
                     self.input_tree.insert(parent, "end", iid=full_path, text=full_path)
                     if self.has_subfolder(full_path):
                         self.input_tree.insert(full_path, "end", text="dummy")
@@ -231,7 +227,6 @@ class OCRGUI(TkinterDnD.Tk):
             sys.__stdout__.write(message)
             return
         for node in selected:
-            # Nur Root-Knoten in der internen Liste speichern
             if self.input_tree.parent(node) == "":
                 if node in self.input_folders:
                     self.input_folders.remove(node)
@@ -276,7 +271,8 @@ class OCRGUI(TkinterDnD.Tk):
                 use_gpu=False,
                 language="deu+eng",
                 deskew=True,
-                jobs=4
+                jobs=4,
+                pause_event=self.resume_event  # Übergibt das Event
             )
 
         self.running = False
@@ -285,13 +281,13 @@ class OCRGUI(TkinterDnD.Tk):
         self.resume_button.config(state=DISABLED)
 
     def pause_ocr(self):
-        self.paused = True
+        self.resume_event.clear()  # Blockiert den OCR-Thread
         self.pause_button.config(state=DISABLED)
         self.resume_button.config(state=NORMAL)
         print("OCR processing paused.\n")
 
     def resume_ocr(self):
-        self.paused = False
+        self.resume_event.set()  # Gibt den OCR-Thread frei
         self.pause_button.config(state=NORMAL)
         self.resume_button.config(state=DISABLED)
         print("OCR processing resumed.\n")
@@ -299,7 +295,7 @@ class OCRGUI(TkinterDnD.Tk):
     def update_progress_bar(self):
         if self.running:
             current = self.progress['value']
-            if not self.paused and current < 100:
+            if self.resume_event.is_set() and current < 100:
                 self.progress['value'] = current + 1
             self.after(1000, self.update_progress_bar)
         else:

@@ -34,11 +34,36 @@ class OCRGUI(TkinterDnD.Tk):
         TkinterDnD.Tk.__init__(self)
         style = ttk.Style(theme='flatly')
         self.title("OCRcon - Control. Connect. Consertis.")
-        self.geometry("800x600")
+        self.geometry("800x800")
         self.input_folders = []  # Liste der hinzugefügten Root-Ordner
 
         # Einheitliche Button-Schriftart setzen
         style.configure('TButton', font=('Segoe UI Emoji', 10))
+
+        # Relativer Pfad zum Logo (ausgehend vom Git-Hauptordner)
+        script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        logo_path = os.path.join(script_dir, "image.png")
+
+        # Logo-Frame für die zentrale Positionierung
+        self.logo_frame = ttk.Frame(self)
+        self.logo_frame.pack(fill="x", pady=10)  # Volle Breite für zentrierte Platzierung
+
+        # Bild laden und prozentual skalieren
+        image = Image.open(logo_path)
+        original_width, original_height = image.size  # Originalgröße holen
+
+        scale_factor = 0.3  # Skalierungsfaktor (50% der Originalgröße)
+        new_width = int(original_width * scale_factor)
+        new_height = int(original_height * scale_factor)
+
+        image = image.resize((new_width, new_height), Image.LANCZOS)  # Proportionale Skalierung
+        self.logo_image = ImageTk.PhotoImage(image)
+
+        # Label für das Logo zentriert platzieren
+        self.logo_label = ttk.Label(self.logo_frame, image=self.logo_image)
+        self.logo_label.pack(anchor="center")  # Mittig ausrichten
+
+
 
         # Übergeordneter Frame für Quell- und Zielordner
         self.folder_frame = ttk.Frame(self, borderwidth=1, relief="solid")
@@ -239,6 +264,7 @@ class OCRGUI(TkinterDnD.Tk):
             self.ocr_thread.start()
             self.update_progress_bar()
 
+    # gui.py (innerhalb der Klasse OCRGUI)
     def run_ocr(self):
         if not self.input_folders or not hasattr(self, "output_folder") or not self.output_folder:
             print("Please select at least one input folder and an output folder before starting OCR.\n")
@@ -255,13 +281,15 @@ class OCRGUI(TkinterDnD.Tk):
                 use_gpu=False,
                 language="deu+eng",
                 deskew=True,
-                jobs=4
+                jobs=4,
+                pause_callback=lambda: self.paused  # Hier wird der Pause-Status übergeben
             )
 
         self.running = False
         self.start_button.config(state=NORMAL)
         self.pause_button.config(state=DISABLED)
         self.resume_button.config(state=DISABLED)
+
 
     def pause_ocr(self):
         self.paused = True
@@ -337,41 +365,23 @@ def apply_ocr_to_pdf(input_pdf: str, output_pdf: str, use_gpu: bool = False, lan
     except Exception as e:
         print(f"❌ Error processing {input_pdf}: {e}")
 
-def batch_ocr_pdfs(input_dir: str, output_dir: str, use_gpu: bool = False, language: str = "deu+eng", deskew: bool = True, jobs: int = 1, status_file: str = None) -> None:
+def batch_ocr_pdfs(input_dir: str, output_dir: str, use_gpu: bool = False, language: str = "deu+eng", deskew: bool = True, jobs: int = 1, status_file: str = None, pause_callback=None) -> None:
     """
     Processes all PDFs in the input_dir, applies OCR, and saves them in the output_dir.
-    The directory structure is preserved. Supports pause/resume functionality by saving the processing
-    status to a JSON file.
-    
-    Args:
-        input_dir (str): Directory containing PDFs to process.
-        output_dir (str): Directory to save OCR-processed PDFs.
-        use_gpu (bool): Whether to use GPU acceleration if available.
-        language (str): OCR languages (e.g., "deu+eng").
-        deskew (bool): Whether to apply deskewing.
-        jobs (int): Number of parallel jobs to use internally in ocrmypdf.
-        status_file (str): Path to the status file (if None, defaults to 'ocr_status.json' in output_dir).
+    ...
     """
     from status_manager import load_status, save_status
     from progress_display import display_progress
 
     if status_file is None:
-    # Determine project root (assumes __file__ is in src/ocr_consertis, so go up three levels)
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         logs_dir = os.path.join(project_root, "logs")
-        os.makedirs(logs_dir, exist_ok=True)  # Ensure the logs directory exists
+        os.makedirs(logs_dir, exist_ok=True)
         status_file = os.path.join(logs_dir, "ocr_status.json")
 
-
-
-
-    
-    # Load previously processed PDFs (normalize paths)
     processed = load_status(status_file)
-    initial_processed_count = len(processed)  # Save initial count
+    initial_processed_count = len(processed)
 
-    
-    # Gather all PDF files from input_dir and normalize them
     pdf_files = []
     for root, _, files in os.walk(input_dir):
         for file in files:
@@ -379,28 +389,31 @@ def batch_ocr_pdfs(input_dir: str, output_dir: str, use_gpu: bool = False, langu
                 path = os.path.normpath(os.path.abspath(os.path.join(root, file)))
                 pdf_files.append(path)
     total = len(pdf_files)
-    
+
     try:
         for idx, input_pdf in enumerate(pdf_files, start=1):
-            # Skip if already processed
+            # Hier wird der Pause-Status geprüft
+            if pause_callback:
+                while pause_callback():
+                    time.sleep(1)  # Warte solange, bis die Pause beendet ist
+
             if input_pdf in processed:
                 continue
-            
-            # Determine output file path preserving directory structure
+
+            # Bestimme den Zielpfad, erzeuge nötige Ordner etc.
             relative_dir = os.path.relpath(os.path.dirname(input_pdf), os.path.abspath(input_dir))
             target_dir = os.path.join(output_dir, relative_dir)
             os.makedirs(target_dir, exist_ok=True)
             output_pdf = os.path.join(target_dir, os.path.basename(input_pdf))
-            
-            # Update progress display
+
+            # Update der Fortschrittsanzeige
             in_progress = input_pdf
             next_items = [pdf for pdf in pdf_files if pdf not in processed and pdf != input_pdf]
             display_progress(processed, in_progress, next_items, len(processed), total)
-            
-            # Process current PDF
+
+            # Verarbeite das aktuelle PDF
             apply_ocr_to_pdf(input_pdf, output_pdf, use_gpu=use_gpu, language=language, deskew=deskew, jobs=jobs)
-            
-            # Mark as completed and save status
+
             processed.append(input_pdf)
             save_status(status_file, processed)
 
@@ -411,7 +424,6 @@ def batch_ocr_pdfs(input_dir: str, output_dir: str, use_gpu: bool = False, langu
         print("\n⏸ Process interrupted. Saving current status...")
         save_status(status_file, processed)
         print("Status saved. You can resume processing later.")
-
 
 # progress_display.py #
 def display_progress(completed, current, next_items, current_index, total):
