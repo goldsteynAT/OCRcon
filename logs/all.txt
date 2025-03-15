@@ -29,7 +29,7 @@ class OCRGUI(ttk.Window):
         self.title("OCR Consertis - Desktop Application")
         self.geometry("800x600")
         self.input_folders = []  # List to store multiple input folders
-
+        
 
         # Folder selection buttons and labels
         self.folder_frame = ttk.Frame(self)

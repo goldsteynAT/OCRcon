@@ -16,6 +16,7 @@ OCR_Consertis/
 │   ├───logs/
 │   │   #export_project.py
 │   │   all.txt
+│   │   ocr_status.json
 │   │   vzs.txt
 │   ├───path/
 │   │   ├───to/
