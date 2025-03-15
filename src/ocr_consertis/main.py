@@ -1,5 +1,3 @@
-
-
 from gui import OCRGUI
 
 if __name__ == "__main__":

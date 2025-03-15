@@ -5,7 +5,9 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 import sys
 import time
+import os
 from ocr_processing import batch_ocr_pdfs
+from tkinterdnd2 import TkinterDnD, DND_FILES
 
 # Redirect stdout to a Text widget
 class RedirectText:
@@ -19,22 +21,23 @@ class RedirectText:
     def flush(self):
         pass
 
-class OCRGUI(ttk.Window):
+class OCRGUI(TkinterDnD.Tk):
     def __init__(self):
-        super().__init__(themename="flatly")
+        # Verwende nun TkinterDnD.Tk als Basisklasse
+        TkinterDnD.Tk.__init__(self)
+        style = ttk.Style(theme='flatly')
         self.title("OCRcon - Control. Connect. Consertis.")
         self.geometry("800x600")
         self.input_folders = []  # Liste für mehrere Input-Ordner
 
         # Einheitliche Button-Schriftart setzen
-        style = ttk.Style()
         style.configure('TButton', font=('Segoe UI Emoji', 10))
 
         # Übergeordneter Frame für Quell- und Zielordner
         self.folder_frame = ttk.Frame(self, borderwidth=1, relief="solid")
         self.folder_frame.pack(fill=tk.X, padx=10, pady=10)
 
-        # Quellordner Frame (mit Label, Box und Button)
+        # Quellordner Frame (mit Label, Listbox und Buttons)
         self.input_frame = ttk.Frame(self.folder_frame)
         self.input_frame.pack(fill=tk.X, padx=5, pady=5)
 
@@ -53,6 +56,10 @@ class OCRGUI(ttk.Window):
 
         self.input_listbox.config(yscrollcommand=self.input_scrollbar.set)
 
+        # Registriere die Listbox als Drop-Ziel
+        self.input_listbox.drop_target_register(DND_FILES)
+        self.input_listbox.dnd_bind('<<Drop>>', self.handle_drop)
+
         # Button-Frame für Add/Remove-Buttons, rechtsbündig
         self.input_buttons_frame = ttk.Frame(self.input_frame)
         self.input_buttons_frame.pack(fill=tk.X, padx=5, pady=5, anchor="e")
@@ -67,8 +74,7 @@ class OCRGUI(ttk.Window):
         self.separator = ttk.Separator(self.folder_frame, orient="horizontal")
         self.separator.pack(fill="x", padx=5, pady=5)
 
-
-        # Zielordner Frame (mit Label, Box und Button)
+        # Zielordner Frame (mit Label, Entry und Button)
         self.output_frame = ttk.Frame(self.folder_frame)
         self.output_frame.pack(fill=tk.X, padx=5, pady=5)
 
@@ -97,22 +103,17 @@ class OCRGUI(ttk.Window):
         self.progress = ttk.Progressbar(self, length=600, mode='determinate')
         self.progress.pack(pady=10)
 
-        # Log-Ausgabe mit hellgrauem Hintergrund
-        # Frame für Log-Box mit separater Scrollbar
+        # Log-Ausgabe mit separatem Frame und eigener Scrollbar
         self.log_frame = ttk.Frame(self)
         self.log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Log-Textfeld
         self.log_text = tk.Text(self.log_frame, wrap=tk.WORD, height=15)
         self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # Eigene Scrollbar für das Log-Textfeld
         self.log_scrollbar = ttk.Scrollbar(self.log_frame, orient=tk.VERTICAL, command=self.log_text.yview)
         self.log_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # Verknüpfe das Textfeld mit der Scrollbar
         self.log_text.config(yscrollcommand=self.log_scrollbar.set)
-
         self.log_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # Umleitung von stdout/stderr auf das Log-Textfeld
@@ -123,6 +124,18 @@ class OCRGUI(ttk.Window):
         self.ocr_thread = None
         self.running = False
         self.paused = False
+
+    def handle_drop(self, event):
+        # event.data enthält die abgelegten Dateipfade als String; Umwandlung in eine Liste
+        dropped_files = self.tk.splitlist(event.data)
+        for file in dropped_files:
+            if os.path.isdir(file):
+                if file not in self.input_folders:
+                    self.input_folders.append(file)
+                    self.input_listbox.insert(tk.END, file)
+                    message = f"Added folder: {file}\n"
+                    print(message)
+                    sys.__stdout__.write(message)
 
     def start_ocr(self):
         if not self.running:
@@ -184,36 +197,31 @@ class OCRGUI(ttk.Window):
         if folder:
             if folder not in self.input_folders:
                 self.input_folders.append(folder)
-                self.input_listbox.insert(tk.END, folder)  # Ordner zur Listbox hinzufügen
-                message = f"Added folder: {folder}"
+                self.input_listbox.insert(tk.END, folder)
+                message = f"Added folder: {folder}\n"
                 print(message)
                 sys.__stdout__.write(message)
-
 
     def remove_input(self):
         selected_indices = self.input_listbox.curselection()
         if not selected_indices:
-            message = "No folder selected to remove."
+            message = "No folder selected to remove.\n"
             print(message)
             sys.__stdout__.write(message)
             return
-        for index in reversed(selected_indices):  # von hinten nach vorne löschen
+        for index in reversed(selected_indices):
             folder = self.input_listbox.get(index)
             self.input_listbox.delete(index)
             if folder in self.input_folders:
                 self.input_folders.remove(folder)
-            message = f"Removed folder: {folder}"
+            message = f"Removed folder: {folder}\n"
             print(message)
             sys.__stdout__.write(message)
-
-
-
 
     def select_output(self):
         folder = filedialog.askdirectory(title="Select Output Folder")
         if folder:
             self.output_folder = folder
-            # Aktualisiere die Entry-Box mit dem ausgewählten Ordner
             self.output_entry.config(state="normal")
             self.output_entry.delete(0, tk.END)
             self.output_entry.insert(0, folder)
