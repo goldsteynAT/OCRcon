@@ -17,10 +17,11 @@ graphics/
 
 logs/all.txt
 logs/vzs.txt
+logs/ocr_status.json
 =======
 #Log-Folder
-logs/
 
 *.png
 *.gif
 *.mp4
+*.json

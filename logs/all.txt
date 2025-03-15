@@ -28,6 +28,8 @@ class OCRGUI(ttk.Window):
         super().__init__(themename="litera")
         self.title("OCR Consertis - Desktop Application")
         self.geometry("800x600")
+        self.input_folders = []  # List to store multiple input folders
+        
 
         # Folder selection buttons and labels
         self.folder_frame = ttk.Frame(self)
@@ -84,23 +86,26 @@ class OCRGUI(ttk.Window):
 
     def run_ocr(self):
         # Check if both input and output folders have been selected
-        if not hasattr(self, "input_folder") or not self.input_folder or not hasattr(self, "output_folder") or not self.output_folder:
-            print("Please select both input and output folders before starting OCR.\n")
+        # Check if at least one input folder and an output folder have been selected
+        if not self.input_folders or not hasattr(self, "output_folder") or not self.output_folder:
+            print("Please select at least one input folder and an output folder before starting OCR.\n")
             self.running = False
             self.start_button.config(state=NORMAL)
             self.pause_button.config(state=DISABLED)
             self.resume_button.config(state=DISABLED)
             return
 
-        # Call the batch OCR process using user-selected folders
-        batch_ocr_pdfs(
-            input_dir=self.input_folder,
-            output_dir=self.output_folder,
-            use_gpu=False,
-            language="deu+eng",
-            deskew=True,
-            jobs=4
-        )
+        # For each selected input folder, run OCR
+        for folder in self.input_folders:
+            batch_ocr_pdfs(
+                input_dir=folder,
+                output_dir=self.output_folder,
+                use_gpu=False,
+                language="deu+eng",
+                deskew=True,
+                jobs=4
+            )
+
         self.running = False
         self.start_button.config(state=NORMAL)
         self.pause_button.config(state=DISABLED)
@@ -135,9 +140,13 @@ class OCRGUI(ttk.Window):
     def select_input(self):
         folder = filedialog.askdirectory(title="Select Input Folder")
         if folder:
-            self.input_folder = folder
-            self.input_label.config(text=f"Input Folder: {folder}")
-            sys.__stdout__.write(f"User selected {folder} as input folder.\n")
+            # Append folder to list if not already selected
+            if folder not in self.input_folders:
+                self.input_folders.append(folder)
+            # Update label to show all selected folders
+            self.input_label.config(text="Input Folders: " + ", ".join(self.input_folders))
+            sys.__stdout__.write(f"User selected {folder} as an input folder.\n")
+
 
     def select_output(self):
         folder = filedialog.askdirectory(title="Select Output Folder")
