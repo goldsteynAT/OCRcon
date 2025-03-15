@@ -21,45 +21,57 @@ class RedirectText:
 
 class OCRGUI(ttk.Window):
     def __init__(self):
-        super().__init__(themename="litera")
+        super().__init__(themename="flatly")
         self.title("OCR Consertis - Desktop Application")
         self.geometry("800x600")
         self.input_folders = []  # Liste für mehrere Input-Ordner
 
-        # Hintergrundfarbe des Hauptfensters setzen
-        self.configure(bg="#f3f4f4")
+        # Einheitliche Button-Schriftart setzen
+        style = ttk.Style()
+        style.configure('TButton', font=('Segoe UI Emoji', 10))
 
-        # --- Input-Bereich in Labelframe ---
-        self.input_labelframe = ttk.Labelframe(self, text="Ordner wählen", bootstyle="primary")
-        self.input_labelframe.pack(pady=5, fill=tk.X, padx=10)
+        # Übergeordneter Frame für Quell- und Zielordner
+        self.folder_frame = ttk.Frame(self, borderwidth=1, relief="solid")
+        self.folder_frame.pack(fill=tk.X, padx=10, pady=10)
 
-        # Mehrzeiliges Textfeld zur Anzeige der ausgewählten Ordner
-        self.input_text = scrolledtext.ScrolledText(self.input_labelframe, wrap=tk.WORD, height=5, bg="#f3f4f4")
+        # Quellordner Frame (mit Label, Box und Button)
+        self.input_frame = ttk.Frame(self.folder_frame)
+        self.input_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        self.input_label_desc = ttk.Label(self.input_frame, text="📂 Quellordner:", font=("Segoe UI Emoji", 12), anchor="w")
+        self.input_label_desc.pack(fill=tk.X, padx=5, pady=(5, 0))
+
+        self.input_text = scrolledtext.ScrolledText(self.input_frame, wrap=tk.WORD, height=5)
         self.input_text.pack(fill=tk.X, padx=5, pady=(5, 0))
 
-        # Button "Select Input Folder" (rechtsbündig, unterhalb der Textbox)
-        self.select_input_button = ttk.Button(self.input_labelframe, text="Select Input Folder", command=self.select_input)
+        self.select_input_button = ttk.Button(self.input_frame, text="➕ Ordner hinzufügen", command=self.select_input)
         self.select_input_button.pack(anchor="e", padx=5, pady=5)
 
-        # --- Output-Bereich in Labelframe ---
-        self.output_labelframe = ttk.Labelframe(self, text="Output Folder:", bootstyle="primary")
-        self.output_labelframe.pack(pady=5, fill=tk.X, padx=10)
+        # Separator zwischen Quellordner und Zielordner
+        self.separator = ttk.Separator(self.folder_frame, orient="horizontal")
+        self.separator.pack(fill="x", padx=5, pady=5)
 
-        # Einzeilige Entry-Box zur Anzeige des ausgewählten Output-Ordners
-        self.output_entry = ttk.Entry(self.output_labelframe, state="readonly")
+
+        # Zielordner Frame (mit Label, Box und Button)
+        self.output_frame = ttk.Frame(self.folder_frame)
+        self.output_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        self.output_label_desc = ttk.Label(self.output_frame, text="📁 Zielordner:", font=("Segoe UI Emoji", 12), anchor="w")
+        self.output_label_desc.pack(fill=tk.X, padx=5, pady=(5, 0))
+
+        self.output_entry = ttk.Entry(self.output_frame, state="readonly")
         self.output_entry.pack(fill=tk.X, padx=5, pady=(5, 0))
 
-        # Button "Select Output Folder" (rechtsbündig, unterhalb der Entry-Box)
-        self.select_output_button = ttk.Button(self.output_labelframe, text="Select Output Folder", command=self.select_output)
+        self.select_output_button = ttk.Button(self.output_frame, text="🔎 Durchsuchen", command=self.select_output)
         self.select_output_button.pack(anchor="e", padx=5, pady=5)
 
         # --- Steuerungselemente (Start, Pause, Resume) ---
         self.control_frame = ttk.Frame(self, style="TFrame")
         self.control_frame.pack(pady=10)
 
-        self.start_button = ttk.Button(self.control_frame, text="Start OCR", command=self.start_ocr)
-        self.pause_button = ttk.Button(self.control_frame, text="Pause", command=self.pause_ocr, state=DISABLED)
-        self.resume_button = ttk.Button(self.control_frame, text="Resume", command=self.resume_ocr, state=DISABLED)
+        self.start_button = ttk.Button(self.control_frame, text="🚀 Start OCR", command=self.start_ocr)
+        self.pause_button = ttk.Button(self.control_frame, text="⏸️ Pause", command=self.pause_ocr, state=DISABLED)
+        self.resume_button = ttk.Button(self.control_frame, text="🔄 Fortsetzen", command=self.resume_ocr, state=DISABLED)
 
         self.start_button.pack(side=tk.LEFT, padx=5)
         self.pause_button.pack(side=tk.LEFT, padx=5)
@@ -70,7 +82,7 @@ class OCRGUI(ttk.Window):
         self.progress.pack(pady=10)
 
         # Log-Ausgabe mit hellgrauem Hintergrund
-        self.log_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, height=15, bg="#f3f4f4")
+        self.log_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, height=15)
         self.log_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # Umleitung von stdout/stderr auf das Log-Textfeld
