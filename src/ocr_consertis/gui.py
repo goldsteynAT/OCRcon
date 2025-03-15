@@ -38,24 +38,30 @@ class OCRGUI(ttk.Window):
         self.input_frame = ttk.Frame(self.folder_frame)
         self.input_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        # Update label to English (optional)
         self.input_label_desc = ttk.Label(self.input_frame, text="📂 Input Folders:", font=("Segoe UI Emoji", 12), anchor="w")
         self.input_label_desc.pack(fill=tk.X, padx=5, pady=(5, 0))
 
-        # Ersetze den ScrolledText mit einer Listbox
-        self.input_listbox = tk.Listbox(self.input_frame, height=5)
-        self.input_listbox.pack(fill=tk.X, padx=5, pady=(5, 0))
+        # Listbox mit Scrollbar einbetten
+        self.input_listbox_frame = ttk.Frame(self.input_frame)
+        self.input_listbox_frame.pack(fill=tk.X, padx=5, pady=(5, 0))
 
-        # Füge einen Frame für die Buttons hinzu, um sie horizontal anzuordnen
+        self.input_listbox = tk.Listbox(self.input_listbox_frame, height=5)
+        self.input_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.input_scrollbar = ttk.Scrollbar(self.input_listbox_frame, orient=tk.VERTICAL, command=self.input_listbox.yview)
+        self.input_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.input_listbox.config(yscrollcommand=self.input_scrollbar.set)
+
+        # Button-Frame für Add/Remove-Buttons, rechtsbündig
         self.input_buttons_frame = ttk.Frame(self.input_frame)
-        self.input_buttons_frame.pack(fill=tk.X, padx=5, pady=5)
-
-        self.select_input_button = ttk.Button(self.input_buttons_frame, text="➕ Add Folder", command=self.select_input)
-        self.select_input_button.pack(side=tk.LEFT, padx=5)
+        self.input_buttons_frame.pack(fill=tk.X, padx=5, pady=5, anchor="e")
 
         self.remove_input_button = ttk.Button(self.input_buttons_frame, text="➖ Remove Folder", command=self.remove_input)
-        self.remove_input_button.pack(side=tk.LEFT, padx=5)
+        self.remove_input_button.pack(side=tk.RIGHT, padx=5)
 
+        self.select_input_button = ttk.Button(self.input_buttons_frame, text="➕ Add Folder", command=self.select_input)
+        self.select_input_button.pack(side=tk.RIGHT, padx=5)
 
         # Separator zwischen Quellordner und Zielordner
         self.separator = ttk.Separator(self.folder_frame, orient="horizontal")
@@ -92,7 +98,21 @@ class OCRGUI(ttk.Window):
         self.progress.pack(pady=10)
 
         # Log-Ausgabe mit hellgrauem Hintergrund
-        self.log_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, height=15)
+        # Frame für Log-Box mit separater Scrollbar
+        self.log_frame = ttk.Frame(self)
+        self.log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Log-Textfeld
+        self.log_text = tk.Text(self.log_frame, wrap=tk.WORD, height=15)
+        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Eigene Scrollbar für das Log-Textfeld
+        self.log_scrollbar = ttk.Scrollbar(self.log_frame, orient=tk.VERTICAL, command=self.log_text.yview)
+        self.log_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Verknüpfe das Textfeld mit der Scrollbar
+        self.log_text.config(yscrollcommand=self.log_scrollbar.set)
+
         self.log_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # Umleitung von stdout/stderr auf das Log-Textfeld
@@ -165,19 +185,27 @@ class OCRGUI(ttk.Window):
             if folder not in self.input_folders:
                 self.input_folders.append(folder)
                 self.input_listbox.insert(tk.END, folder)  # Ordner zur Listbox hinzufügen
-            sys.__stdout__.write(f"User selected {folder} as an input folder.\n")
+                message = f"Added folder: {folder}"
+                print(message)
+                sys.__stdout__.write(message)
+
 
     def remove_input(self):
         selected_indices = self.input_listbox.curselection()
         if not selected_indices:
-            print("No folder selected to remove.\n")
+            message = "No folder selected to remove."
+            print(message)
+            sys.__stdout__.write(message)
             return
         for index in reversed(selected_indices):  # von hinten nach vorne löschen
             folder = self.input_listbox.get(index)
             self.input_listbox.delete(index)
             if folder in self.input_folders:
                 self.input_folders.remove(folder)
-            print(f"Removed folder: {folder}\n")
+            message = f"Removed folder: {folder}"
+            print(message)
+            sys.__stdout__.write(message)
+
 
 
 
