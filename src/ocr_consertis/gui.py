@@ -24,39 +24,36 @@ class OCRGUI(ttk.Window):
         super().__init__(themename="litera")
         self.title("OCR Consertis - Desktop Application")
         self.geometry("800x600")
-        self.input_folders = []  # List to store multiple input folders
+        self.input_folders = []  # Liste für mehrere Input-Ordner
 
-        # Setze die Hintergrundfarbe des Hauptfensters
+        # Hintergrundfarbe des Hauptfensters setzen
         self.configure(bg="#f3f4f4")
 
-        # Erstelle einen neuen Stil für Frames mit hellgrauem Hintergrund
-        self.style.configure("TFrame", background="#f3f4f4")
+        # --- Input-Bereich in Labelframe ---
+        self.input_labelframe = ttk.Labelframe(self, text="Ordner wählen", bootstyle="primary")
+        self.input_labelframe.pack(pady=5, fill=tk.X, padx=10)
 
-        # Frame for input folder selection
-        self.input_frame = ttk.Frame(self, style="TFrame")
-        self.input_frame.pack(pady=5, fill=tk.X, padx=10)
+        # Mehrzeiliges Textfeld zur Anzeige der ausgewählten Ordner
+        self.input_text = scrolledtext.ScrolledText(self.input_labelframe, wrap=tk.WORD, height=5, bg="#f3f4f4")
+        self.input_text.pack(fill=tk.X, padx=5, pady=(5, 0))
 
-        # Select Input Folder Button
-        self.select_input_button = ttk.Button(self.input_frame, text="Select Input Folder", command=self.select_input)
-        self.select_input_button.pack(pady=5)
+        # Button "Select Input Folder" (rechtsbündig, unterhalb der Textbox)
+        self.select_input_button = ttk.Button(self.input_labelframe, text="Select Input Folder", command=self.select_input)
+        self.select_input_button.pack(anchor="e", padx=5, pady=5)
 
-        # Textfeld für ausgewählte Input-Folder (mehrere Zeilen) mit hellgrauem Hintergrund
-        self.input_text = scrolledtext.ScrolledText(self.input_frame, wrap=tk.WORD, height=5, width=60, bg="#f3f4f4")
-        self.input_text.pack(side=tk.TOP, fill=tk.X)
+        # --- Output-Bereich in Labelframe ---
+        self.output_labelframe = ttk.Labelframe(self, text="Output Folder:", bootstyle="primary")
+        self.output_labelframe.pack(pady=5, fill=tk.X, padx=10)
 
-        # Frame for output folder selection
-        self.output_frame = ttk.Frame(self, style="TFrame")
-        self.output_frame.pack(pady=5, fill=tk.X, padx=10)
+        # Einzeilige Entry-Box zur Anzeige des ausgewählten Output-Ordners
+        self.output_entry = ttk.Entry(self.output_labelframe, state="readonly")
+        self.output_entry.pack(fill=tk.X, padx=5, pady=(5, 0))
 
-        # Select Output Folder Button
-        self.select_output_button = ttk.Button(self.output_frame, text="Select Output Folder", command=self.select_output)
-        self.select_output_button.pack(pady=5)
+        # Button "Select Output Folder" (rechtsbündig, unterhalb der Entry-Box)
+        self.select_output_button = ttk.Button(self.output_labelframe, text="Select Output Folder", command=self.select_output)
+        self.select_output_button.pack(anchor="e", padx=5, pady=5)
 
-        # Output Folder Label mit Hintergrundfarbe
-        self.output_label = ttk.Label(self.output_frame, text="Output Folder: Not selected", anchor="center", justify="center", background="#f3f4f4")
-        self.output_label.pack(side=tk.TOP, fill=tk.X)
-
-        # Control buttons (Start, Pause, Resume)
+        # --- Steuerungselemente (Start, Pause, Resume) ---
         self.control_frame = ttk.Frame(self, style="TFrame")
         self.control_frame.pack(pady=10)
 
@@ -68,19 +65,19 @@ class OCRGUI(ttk.Window):
         self.pause_button.pack(side=tk.LEFT, padx=5)
         self.resume_button.pack(side=tk.LEFT, padx=5)
 
-        # Progress Bar
+        # Fortschrittsbalken
         self.progress = ttk.Progressbar(self, length=600, mode='determinate')
         self.progress.pack(pady=10)
 
-        # Log Output mit hellgrauem Hintergrund
+        # Log-Ausgabe mit hellgrauem Hintergrund
         self.log_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, height=15, bg="#f3f4f4")
         self.log_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Redirect stdout/stderr to the log_text widget
+        # Umleitung von stdout/stderr auf das Log-Textfeld
         sys.stdout = RedirectText(self.log_text)
         sys.stderr = RedirectText(self.log_text)
 
-        # OCR processing thread and control variables
+        # OCR-Thread und Steuerungsvariablen
         self.ocr_thread = None
         self.running = False
         self.paused = False
@@ -145,16 +142,19 @@ class OCRGUI(ttk.Window):
         if folder:
             if folder not in self.input_folders:
                 self.input_folders.append(folder)
-                self.input_text.insert(tk.END, folder + "\n")  # Add folder to text area
+                self.input_text.insert(tk.END, folder + "\n")  # Ordner zur Textbox hinzufügen
             sys.__stdout__.write(f"User selected {folder} as an input folder.\n")
 
     def select_output(self):
         folder = filedialog.askdirectory(title="Select Output Folder")
         if folder:
             self.output_folder = folder
-            self.output_label.config(text=f"Output Folder: {folder}")
+            # Aktualisiere die Entry-Box mit dem ausgewählten Ordner
+            self.output_entry.config(state="normal")
+            self.output_entry.delete(0, tk.END)
+            self.output_entry.insert(0, folder)
+            self.output_entry.config(state="readonly")
             sys.__stdout__.write(f"User selected {folder} as output folder.\n")
-
 
 if __name__ == "__main__":
     app = OCRGUI()
