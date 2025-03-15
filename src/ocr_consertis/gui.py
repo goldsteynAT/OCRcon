@@ -38,14 +38,24 @@ class OCRGUI(ttk.Window):
         self.input_frame = ttk.Frame(self.folder_frame)
         self.input_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        self.input_label_desc = ttk.Label(self.input_frame, text="📂 Quellordner:", font=("Segoe UI Emoji", 12), anchor="w")
+        # Update label to English (optional)
+        self.input_label_desc = ttk.Label(self.input_frame, text="📂 Input Folders:", font=("Segoe UI Emoji", 12), anchor="w")
         self.input_label_desc.pack(fill=tk.X, padx=5, pady=(5, 0))
 
-        self.input_text = scrolledtext.ScrolledText(self.input_frame, wrap=tk.WORD, height=5)
-        self.input_text.pack(fill=tk.X, padx=5, pady=(5, 0))
+        # Ersetze den ScrolledText mit einer Listbox
+        self.input_listbox = tk.Listbox(self.input_frame, height=5)
+        self.input_listbox.pack(fill=tk.X, padx=5, pady=(5, 0))
 
-        self.select_input_button = ttk.Button(self.input_frame, text="➕ Ordner hinzufügen", command=self.select_input)
-        self.select_input_button.pack(anchor="e", padx=5, pady=5)
+        # Füge einen Frame für die Buttons hinzu, um sie horizontal anzuordnen
+        self.input_buttons_frame = ttk.Frame(self.input_frame)
+        self.input_buttons_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        self.select_input_button = ttk.Button(self.input_buttons_frame, text="➕ Add Folder", command=self.select_input)
+        self.select_input_button.pack(side=tk.LEFT, padx=5)
+
+        self.remove_input_button = ttk.Button(self.input_buttons_frame, text="➖ Remove Folder", command=self.remove_input)
+        self.remove_input_button.pack(side=tk.LEFT, padx=5)
+
 
         # Separator zwischen Quellordner und Zielordner
         self.separator = ttk.Separator(self.folder_frame, orient="horizontal")
@@ -154,8 +164,22 @@ class OCRGUI(ttk.Window):
         if folder:
             if folder not in self.input_folders:
                 self.input_folders.append(folder)
-                self.input_text.insert(tk.END, folder + "\n")  # Ordner zur Textbox hinzufügen
+                self.input_listbox.insert(tk.END, folder)  # Ordner zur Listbox hinzufügen
             sys.__stdout__.write(f"User selected {folder} as an input folder.\n")
+
+    def remove_input(self):
+        selected_indices = self.input_listbox.curselection()
+        if not selected_indices:
+            print("No folder selected to remove.\n")
+            return
+        for index in reversed(selected_indices):  # von hinten nach vorne löschen
+            folder = self.input_listbox.get(index)
+            self.input_listbox.delete(index)
+            if folder in self.input_folders:
+                self.input_folders.remove(folder)
+            print(f"Removed folder: {folder}\n")
+
+
 
     def select_output(self):
         folder = filedialog.askdirectory(title="Select Output Folder")
