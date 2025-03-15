@@ -2,9 +2,10 @@
 
 
 # gui.py #
+# gui.py #
 import threading
 import tkinter as tk
-from tkinter import scrolledtext, filedialog
+from tkinter import filedialog
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 import sys
@@ -12,6 +13,8 @@ import time
 import os
 from ocr_processing import batch_ocr_pdfs
 from tkinterdnd2 import TkinterDnD, DND_FILES
+from PIL import Image, ImageTk
+
 
 # Redirect stdout to a Text widget
 class RedirectText:
@@ -27,12 +30,12 @@ class RedirectText:
 
 class OCRGUI(TkinterDnD.Tk):
     def __init__(self):
-        # Verwende nun TkinterDnD.Tk als Basisklasse
+        # Verwende TkinterDnD.Tk als Basisklasse für Drag & Drop
         TkinterDnD.Tk.__init__(self)
         style = ttk.Style(theme='flatly')
         self.title("OCRcon - Control. Connect. Consertis.")
         self.geometry("800x600")
-        self.input_folders = []  # Liste für mehrere Input-Ordner
+        self.input_folders = []  # Liste der hinzugefügten Root-Ordner
 
         # Einheitliche Button-Schriftart setzen
         style.configure('TButton', font=('Segoe UI Emoji', 10))
@@ -41,28 +44,29 @@ class OCRGUI(TkinterDnD.Tk):
         self.folder_frame = ttk.Frame(self, borderwidth=1, relief="solid")
         self.folder_frame.pack(fill=tk.X, padx=10, pady=10)
 
-        # Quellordner Frame (mit Label, Listbox und Buttons)
+        # Input Folder Frame (mit Label, Treeview und Buttons)
         self.input_frame = ttk.Frame(self.folder_frame)
         self.input_frame.pack(fill=tk.X, padx=5, pady=5)
 
         self.input_label_desc = ttk.Label(self.input_frame, text="📂 Input Folders:", font=("Segoe UI Emoji", 12), anchor="w")
         self.input_label_desc.pack(fill=tk.X, padx=5, pady=(5, 0))
 
-        # Listbox mit Scrollbar einbetten
-        self.input_listbox_frame = ttk.Frame(self.input_frame)
-        self.input_listbox_frame.pack(fill=tk.X, padx=5, pady=(5, 0))
+        # Treeview für hierarchische Ordnerstruktur
+        self.input_tree_frame = ttk.Frame(self.input_frame)
+        self.input_tree_frame.pack(fill=tk.BOTH, padx=5, pady=(5, 0))
 
-        self.input_listbox = tk.Listbox(self.input_listbox_frame, height=5)
-        self.input_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.input_tree = ttk.Treeview(self.input_tree_frame, show="tree")
+        self.input_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        self.input_scrollbar = ttk.Scrollbar(self.input_listbox_frame, orient=tk.VERTICAL, command=self.input_listbox.yview)
-        self.input_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.input_tree_scrollbar = ttk.Scrollbar(self.input_tree_frame, orient=tk.VERTICAL, command=self.input_tree.yview)
+        self.input_tree_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.input_tree.config(yscrollcommand=self.input_tree_scrollbar.set)
 
-        self.input_listbox.config(yscrollcommand=self.input_scrollbar.set)
-
-        # Registriere die Listbox als Drop-Ziel
-        self.input_listbox.drop_target_register(DND_FILES)
-        self.input_listbox.dnd_bind('<<Drop>>', self.handle_drop)
+        # Registriere Treeview als Drop-Ziel
+        self.input_tree.drop_target_register(DND_FILES)
+        self.input_tree.dnd_bind('<<Drop>>', self.handle_drop)
+        # Binde Expand-Ereignis zum Lazy Loading
+        self.input_tree.bind("<<TreeviewOpen>>", self.on_treeview_open)
 
         # Button-Frame für Add/Remove-Buttons, rechtsbündig
         self.input_buttons_frame = ttk.Frame(self.input_frame)
@@ -74,11 +78,11 @@ class OCRGUI(TkinterDnD.Tk):
         self.select_input_button = ttk.Button(self.input_buttons_frame, text="➕ Add Folder", command=self.select_input)
         self.select_input_button.pack(side=tk.RIGHT, padx=5)
 
-        # Separator zwischen Quellordner und Zielordner
+        # Separator zwischen Input und Output
         self.separator = ttk.Separator(self.folder_frame, orient="horizontal")
         self.separator.pack(fill="x", padx=5, pady=5)
 
-        # Zielordner Frame (mit Label, Entry und Button)
+        # Output Folder Frame (mit Label, Entry und Button)
         self.output_frame = ttk.Frame(self.folder_frame)
         self.output_frame.pack(fill=tk.X, padx=5, pady=5)
 
@@ -129,17 +133,101 @@ class OCRGUI(TkinterDnD.Tk):
         self.running = False
         self.paused = False
 
+    def has_subfolder(self, folder):
+        """Prüft, ob der Ordner mindestens einen Unterordner enthält."""
+        try:
+            for entry in os.listdir(folder):
+                full_path = os.path.join(folder, entry)
+                if os.path.isdir(full_path):
+                    return True
+            return False
+        except Exception:
+            return False
+
+    def insert_folder(self, folder):
+        """Fügt den Root-Ordner in die Treeview ein und lädt ggf. einen Dummy-Knoten für Lazy Loading."""
+        self.input_tree.insert("", "end", iid=folder, text=folder)
+        if self.has_subfolder(folder):
+            # Dummy-Knoten hinzufügen, um anzuzeigen, dass Unterordner vorhanden sind
+            self.input_tree.insert(folder, "end", text="dummy")
+
     def handle_drop(self, event):
-        # event.data enthält die abgelegten Dateipfade als String; Umwandlung in eine Liste
+        """Verarbeitet Drag & Drop: Fügt abgelegte Ordner hinzu."""
         dropped_files = self.tk.splitlist(event.data)
         for file in dropped_files:
             if os.path.isdir(file):
                 if file not in self.input_folders:
                     self.input_folders.append(file)
-                    self.input_listbox.insert(tk.END, file)
+                    self.insert_folder(file)
                     message = f"Added folder: {file}\n"
                     print(message)
                     sys.__stdout__.write(message)
+
+    def on_treeview_open(self, event):
+        """Lädt Unterordner, wenn ein Knoten erweitert wird."""
+        item = self.input_tree.focus()
+        children = self.input_tree.get_children(item)
+        if children:
+            # Prüfe, ob der erste Kindknoten ein Dummy ist
+            first_child = children[0]
+            if self.input_tree.item(first_child, "text") == "dummy":
+                self.input_tree.delete(first_child)
+                self.load_subfolders(item)
+
+    def load_subfolders(self, parent):
+        """Lädt die Unterordner des angegebenen Parent-Ordners in die Treeview."""
+        folder = self.input_tree.item(parent, "text")
+        try:
+            for entry in os.listdir(folder):
+                full_path = os.path.join(folder, entry)
+                if os.path.isdir(full_path):
+                    # Füge den Unterordner als Knoten ein, falls er noch nicht existiert
+                    self.input_tree.insert(parent, "end", iid=full_path, text=full_path)
+                    if self.has_subfolder(full_path):
+                        self.input_tree.insert(full_path, "end", text="dummy")
+        except Exception as e:
+            message = f"Error loading subfolders for {folder}: {e}\n"
+            print(message)
+            sys.__stdout__.write(message)
+
+    def select_input(self):
+        """Öffnet den Ordner-Auswahldialog und fügt den gewählten Ordner hinzu."""
+        folder = filedialog.askdirectory(title="Select Input Folder")
+        if folder:
+            if folder not in self.input_folders:
+                self.input_folders.append(folder)
+                self.insert_folder(folder)
+                message = f"Added folder: {folder}\n"
+                print(message)
+                sys.__stdout__.write(message)
+
+    def remove_input(self):
+        """Entfernt den ausgewählten Ordner (Root-Knoten) aus der Treeview und der internen Liste."""
+        selected = self.input_tree.selection()
+        if not selected:
+            message = "No folder selected to remove.\n"
+            print(message)
+            sys.__stdout__.write(message)
+            return
+        for node in selected:
+            # Nur Root-Knoten in der internen Liste speichern
+            if self.input_tree.parent(node) == "":
+                if node in self.input_folders:
+                    self.input_folders.remove(node)
+            self.input_tree.delete(node)
+            message = f"Removed folder: {node}\n"
+            print(message)
+            sys.__stdout__.write(message)
+
+    def select_output(self):
+        folder = filedialog.askdirectory(title="Select Output Folder")
+        if folder:
+            self.output_folder = folder
+            self.output_entry.config(state="normal")
+            self.output_entry.delete(0, tk.END)
+            self.output_entry.insert(0, folder)
+            self.output_entry.config(state="readonly")
+            sys.__stdout__.write(f"User selected {folder} as output folder.\n")
 
     def start_ocr(self):
         if not self.running:
@@ -196,47 +284,12 @@ class OCRGUI(TkinterDnD.Tk):
         else:
             self.progress['value'] = 100
 
-    def select_input(self):
-        folder = filedialog.askdirectory(title="Select Input Folder")
-        if folder:
-            if folder not in self.input_folders:
-                self.input_folders.append(folder)
-                self.input_listbox.insert(tk.END, folder)
-                message = f"Added folder: {folder}\n"
-                print(message)
-                sys.__stdout__.write(message)
-
-    def remove_input(self):
-        selected_indices = self.input_listbox.curselection()
-        if not selected_indices:
-            message = "No folder selected to remove.\n"
-            print(message)
-            sys.__stdout__.write(message)
-            return
-        for index in reversed(selected_indices):
-            folder = self.input_listbox.get(index)
-            self.input_listbox.delete(index)
-            if folder in self.input_folders:
-                self.input_folders.remove(folder)
-            message = f"Removed folder: {folder}\n"
-            print(message)
-            sys.__stdout__.write(message)
-
-    def select_output(self):
-        folder = filedialog.askdirectory(title="Select Output Folder")
-        if folder:
-            self.output_folder = folder
-            self.output_entry.config(state="normal")
-            self.output_entry.delete(0, tk.END)
-            self.output_entry.insert(0, folder)
-            self.output_entry.config(state="readonly")
-            sys.__stdout__.write(f"User selected {folder} as output folder.\n")
-
 if __name__ == "__main__":
     app = OCRGUI()
     app.mainloop()
 
 
+# main.py #
 # main.py #
 from gui import OCRGUI
 

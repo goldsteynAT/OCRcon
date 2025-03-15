@@ -9,6 +9,8 @@ import time
 import os
 from ocr_processing import batch_ocr_pdfs
 from tkinterdnd2 import TkinterDnD, DND_FILES
+from PIL import Image, ImageTk
+
 
 # Redirect stdout to a Text widget
 class RedirectText:
@@ -28,11 +30,36 @@ class OCRGUI(TkinterDnD.Tk):
         TkinterDnD.Tk.__init__(self)
         style = ttk.Style(theme='flatly')
         self.title("OCRcon - Control. Connect. Consertis.")
-        self.geometry("800x600")
+        self.geometry("800x800")
         self.input_folders = []  # Liste der hinzugefügten Root-Ordner
 
         # Einheitliche Button-Schriftart setzen
         style.configure('TButton', font=('Segoe UI Emoji', 10))
+
+        # Relativer Pfad zum Logo (ausgehend vom Git-Hauptordner)
+        script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        logo_path = os.path.join(script_dir, "image.png")
+
+        # Logo-Frame für die zentrale Positionierung
+        self.logo_frame = ttk.Frame(self)
+        self.logo_frame.pack(fill="x", pady=10)  # Volle Breite für zentrierte Platzierung
+
+        # Bild laden und prozentual skalieren
+        image = Image.open(logo_path)
+        original_width, original_height = image.size  # Originalgröße holen
+
+        scale_factor = 0.3  # Skalierungsfaktor (50% der Originalgröße)
+        new_width = int(original_width * scale_factor)
+        new_height = int(original_height * scale_factor)
+
+        image = image.resize((new_width, new_height), Image.LANCZOS)  # Proportionale Skalierung
+        self.logo_image = ImageTk.PhotoImage(image)
+
+        # Label für das Logo zentriert platzieren
+        self.logo_label = ttk.Label(self.logo_frame, image=self.logo_image)
+        self.logo_label.pack(anchor="center")  # Mittig ausrichten
+
+
 
         # Übergeordneter Frame für Quell- und Zielordner
         self.folder_frame = ttk.Frame(self, borderwidth=1, relief="solid")

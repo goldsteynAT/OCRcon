@@ -1,11 +1,13 @@
 OCR_Consertis/
 │   .gitignore
 │   README.md
+│   image.png
 │   pyproject.toml
 │   requirements.txt
 │   ├───logs/
 │   │   #export_project.py
 │   │   all.txt
+│   │   ocr_status.json
 │   │   vzs.txt
 │   ├───src/
 │   │   ├───ocr_consertis/
