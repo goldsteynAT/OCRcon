@@ -30,21 +30,25 @@ class OCRGUI(ttk.Window):
         self.input_frame = ttk.Frame(self)
         self.input_frame.pack(pady=5, fill=tk.X, padx=10)
 
-        self.input_text = scrolledtext.ScrolledText(self.input_frame, wrap=tk.WORD, height=5, width=60)
-        self.input_text.pack(side=tk.TOP, fill=tk.X)
-
+        # Select Input Folder Button (Jetzt über dem Feld)
         self.select_input_button = ttk.Button(self.input_frame, text="Select Input Folder", command=self.select_input)
         self.select_input_button.pack(pady=5)
+
+        # Textfeld für ausgewählte Input-Folder (mehrere Zeilen)
+        self.input_text = scrolledtext.ScrolledText(self.input_frame, wrap=tk.WORD, height=5, width=60)
+        self.input_text.pack(side=tk.TOP, fill=tk.X)
 
         # Frame for output folder selection
         self.output_frame = ttk.Frame(self)
         self.output_frame.pack(pady=5, fill=tk.X, padx=10)
 
-        self.output_label = ttk.Label(self.output_frame, text="Output Folder: Not selected", anchor="w")
-        self.output_label.pack(side=tk.TOP, fill=tk.X)
-
+        # Select Output Folder Button (Jetzt über dem Label)
         self.select_output_button = ttk.Button(self.output_frame, text="Select Output Folder", command=self.select_output)
         self.select_output_button.pack(pady=5)
+
+        # Output Folder Label (Jetzt zentriert)
+        self.output_label = ttk.Label(self.output_frame, text="Output Folder: Not selected", anchor="center", justify="center")
+        self.output_label.pack(side=tk.TOP, fill=tk.X)
 
         # Control buttons (Start, Pause, Resume)
         self.control_frame = ttk.Frame(self)
