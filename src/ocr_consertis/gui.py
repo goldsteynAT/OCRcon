@@ -22,7 +22,7 @@ class RedirectText:
 class OCRGUI(ttk.Window):
     def __init__(self):
         super().__init__(themename="flatly")
-        self.title("OCR Consertis - Desktop Application")
+        self.title("OCRcon - Control. Connect. Consertis.")
         self.geometry("800x600")
         self.input_folders = []  # Liste für mehrere Input-Ordner
 
