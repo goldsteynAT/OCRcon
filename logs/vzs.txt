@@ -10,7 +10,6 @@ OCR_Consertis/
 │   ├───src/
 │   │   ├───ocr_consertis/
 │   │   │   __init__.py
-│   │   │   folder_selector.py
 │   │   │   gui.py
 │   │   │   main.py
 │   │   │   ocr_processing.py
