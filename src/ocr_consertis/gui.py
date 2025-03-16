@@ -127,6 +127,16 @@ class OCRGUI(TkinterDnD.Tk):
         self.progress = ttk.Progressbar(self, length=600, mode='determinate')
         self.progress.pack(pady=10)
 
+        # Neue Status Table oberhalb der Logbox
+        self.status_table_frame = ttk.Frame(self)
+        self.status_table_frame.pack(fill=tk.BOTH, padx=10, pady=(10, 0))
+        self.status_table = ttk.Treeview(self.status_table_frame, columns=("Status", "File"), show="headings")
+        self.status_table.heading("Status", text="Status")
+        self.status_table.heading("File", text="File Path")
+        self.status_table.column("Status", width=100)
+        self.status_table.column("File", width=600)
+        self.status_table.pack(fill=tk.BOTH, expand=True)
+
         # Log-Ausgabe mit separatem Frame und eigener Scrollbar
         self.log_frame = ttk.Frame(self)
         self.log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -150,6 +160,23 @@ class OCRGUI(TkinterDnD.Tk):
         # Verwende ein threading.Event für Pause/Resume-Steuerung:
         self.resume_event = threading.Event()
         self.resume_event.set()  # Initial set – d.h. nicht pausiert
+
+    def update_status_table(self, completed, current, next_items, current_index, total):
+        """Updates the status table with the conversion state."""
+        # Clear current rows
+        for row in self.status_table.get_children():
+            self.status_table.delete(row)
+        # Add rows for each category
+        for file in completed:
+            self.status_table.insert("", tk.END, values=("Completed", file))
+        if current:
+            self.status_table.insert("", tk.END, values=("In Progress", current))
+        for file in next_items:
+            self.status_table.insert("", tk.END, values=("Next", file))
+
+    def schedule_update_status(self, completed, current, next_items, current_index, total):
+        """Schedules an update of the status table in the main thread."""
+        self.after(0, lambda: self.update_status_table(completed, current, next_items, current_index, total))
 
     def has_subfolder(self, folder):
         """Prüft, ob der Ordner mindestens einen Unterordner enthält."""
@@ -272,7 +299,9 @@ class OCRGUI(TkinterDnD.Tk):
                 language="deu+eng",
                 deskew=True,
                 jobs=4,
-                pause_event=self.resume_event  # Übergibt das Event
+                pause_event=self.resume_event,  # Übergibt das Event für Pause/Resume
+                update_status_callback=lambda completed, current, next_items, current_index, total: 
+                    self.schedule_update_status(completed, current, next_items, current_index, total)
             )
 
         self.running = False

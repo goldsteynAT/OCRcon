@@ -2,19 +2,16 @@
 
 
 # gui.py #
-# gui.py #
 import threading
 import tkinter as tk
 from tkinter import filedialog
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 import sys
-import time
 import os
 from ocr_processing import batch_ocr_pdfs
 from tkinterdnd2 import TkinterDnD, DND_FILES
 from PIL import Image, ImageTk
-
 
 # Redirect stdout to a Text widget
 class RedirectText:
@@ -52,7 +49,7 @@ class OCRGUI(TkinterDnD.Tk):
         image = Image.open(logo_path)
         original_width, original_height = image.size  # Originalgröße holen
 
-        scale_factor = 0.3  # Skalierungsfaktor (50% der Originalgröße)
+        scale_factor = 0.3  # Skalierungsfaktor (30% der Originalgröße)
         new_width = int(original_width * scale_factor)
         new_height = int(original_height * scale_factor)
 
@@ -62,8 +59,6 @@ class OCRGUI(TkinterDnD.Tk):
         # Label für das Logo zentriert platzieren
         self.logo_label = ttk.Label(self.logo_frame, image=self.logo_image)
         self.logo_label.pack(anchor="center")  # Mittig ausrichten
-
-
 
         # Übergeordneter Frame für Quell- und Zielordner
         self.folder_frame = ttk.Frame(self, borderwidth=1, relief="solid")
@@ -136,6 +131,16 @@ class OCRGUI(TkinterDnD.Tk):
         self.progress = ttk.Progressbar(self, length=600, mode='determinate')
         self.progress.pack(pady=10)
 
+        # Neue Status Table oberhalb der Logbox
+        self.status_table_frame = ttk.Frame(self)
+        self.status_table_frame.pack(fill=tk.BOTH, padx=10, pady=(10, 0))
+        self.status_table = ttk.Treeview(self.status_table_frame, columns=("Status", "File"), show="headings")
+        self.status_table.heading("Status", text="Status")
+        self.status_table.heading("File", text="File Path")
+        self.status_table.column("Status", width=100)
+        self.status_table.column("File", width=600)
+        self.status_table.pack(fill=tk.BOTH, expand=True)
+
         # Log-Ausgabe mit separatem Frame und eigener Scrollbar
         self.log_frame = ttk.Frame(self)
         self.log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -156,7 +161,26 @@ class OCRGUI(TkinterDnD.Tk):
         # OCR-Thread und Steuerungsvariablen
         self.ocr_thread = None
         self.running = False
-        self.paused = False
+        # Verwende ein threading.Event für Pause/Resume-Steuerung:
+        self.resume_event = threading.Event()
+        self.resume_event.set()  # Initial set – d.h. nicht pausiert
+
+    def update_status_table(self, completed, current, next_items, current_index, total):
+        """Updates the status table with the conversion state."""
+        # Clear current rows
+        for row in self.status_table.get_children():
+            self.status_table.delete(row)
+        # Add rows for each category
+        for file in completed:
+            self.status_table.insert("", tk.END, values=("Completed", file))
+        if current:
+            self.status_table.insert("", tk.END, values=("In Progress", current))
+        for file in next_items:
+            self.status_table.insert("", tk.END, values=("Next", file))
+
+    def schedule_update_status(self, completed, current, next_items, current_index, total):
+        """Schedules an update of the status table in the main thread."""
+        self.after(0, lambda: self.update_status_table(completed, current, next_items, current_index, total))
 
     def has_subfolder(self, folder):
         """Prüft, ob der Ordner mindestens einen Unterordner enthält."""
@@ -206,7 +230,6 @@ class OCRGUI(TkinterDnD.Tk):
             for entry in os.listdir(folder):
                 full_path = os.path.join(folder, entry)
                 if os.path.isdir(full_path):
-                    # Füge den Unterordner als Knoten ein, falls er noch nicht existiert
                     self.input_tree.insert(parent, "end", iid=full_path, text=full_path)
                     if self.has_subfolder(full_path):
                         self.input_tree.insert(full_path, "end", text="dummy")
@@ -235,7 +258,6 @@ class OCRGUI(TkinterDnD.Tk):
             sys.__stdout__.write(message)
             return
         for node in selected:
-            # Nur Root-Knoten in der internen Liste speichern
             if self.input_tree.parent(node) == "":
                 if node in self.input_folders:
                     self.input_folders.remove(node)
@@ -264,7 +286,6 @@ class OCRGUI(TkinterDnD.Tk):
             self.ocr_thread.start()
             self.update_progress_bar()
 
-    # gui.py (innerhalb der Klasse OCRGUI)
     def run_ocr(self):
         if not self.input_folders or not hasattr(self, "output_folder") or not self.output_folder:
             print("Please select at least one input folder and an output folder before starting OCR.\n")
@@ -282,7 +303,9 @@ class OCRGUI(TkinterDnD.Tk):
                 language="deu+eng",
                 deskew=True,
                 jobs=4,
-                pause_callback=lambda: self.paused  # Hier wird der Pause-Status übergeben
+                pause_event=self.resume_event,  # Übergibt das Event für Pause/Resume
+                update_status_callback=lambda completed, current, next_items, current_index, total: 
+                    self.schedule_update_status(completed, current, next_items, current_index, total)
             )
 
         self.running = False
@@ -290,15 +313,14 @@ class OCRGUI(TkinterDnD.Tk):
         self.pause_button.config(state=DISABLED)
         self.resume_button.config(state=DISABLED)
 
-
     def pause_ocr(self):
-        self.paused = True
+        self.resume_event.clear()  # Blockiert den OCR-Thread
         self.pause_button.config(state=DISABLED)
         self.resume_button.config(state=NORMAL)
         print("OCR processing paused.\n")
 
     def resume_ocr(self):
-        self.paused = False
+        self.resume_event.set()  # Gibt den OCR-Thread frei
         self.pause_button.config(state=NORMAL)
         self.resume_button.config(state=DISABLED)
         print("OCR processing resumed.\n")
@@ -306,7 +328,7 @@ class OCRGUI(TkinterDnD.Tk):
     def update_progress_bar(self):
         if self.running:
             current = self.progress['value']
-            if not self.paused and current < 100:
+            if self.resume_event.is_set() and current < 100:
                 self.progress['value'] = current + 1
             self.after(1000, self.update_progress_bar)
         else:
@@ -333,14 +355,6 @@ import ocrmypdf
 def apply_ocr_to_pdf(input_pdf: str, output_pdf: str, use_gpu: bool = False, language: str = "deu+eng", deskew: bool = True, jobs: int = 1) -> None:
     """
     Applies OCR to a PDF file using ocrmypdf and generates a searchable PDF.
-    
-    Args:
-        input_pdf (str): Normalized path to the input PDF file.
-        output_pdf (str): Path where the OCR-processed PDF should be saved.
-        use_gpu (bool): Whether to use GPU acceleration if available.
-        language (str): OCR languages (e.g., "deu+eng").
-        deskew (bool): Whether to apply deskewing.
-        jobs (int): Number of parallel jobs to use internally in ocrmypdf.
     """
     try:
         if use_gpu:
@@ -365,10 +379,10 @@ def apply_ocr_to_pdf(input_pdf: str, output_pdf: str, use_gpu: bool = False, lan
     except Exception as e:
         print(f"❌ Error processing {input_pdf}: {e}")
 
-def batch_ocr_pdfs(input_dir: str, output_dir: str, use_gpu: bool = False, language: str = "deu+eng", deskew: bool = True, jobs: int = 1, status_file: str = None, pause_callback=None) -> None:
+def batch_ocr_pdfs(input_dir: str, output_dir: str, use_gpu: bool = False, language: str = "deu+eng", deskew: bool = True, jobs: int = 1, status_file: str = None, pause_event=None, update_status_callback=None) -> None:
     """
     Processes all PDFs in the input_dir, applies OCR, and saves them in the output_dir.
-    ...
+    The directory structure is preserved.
     """
     from status_manager import load_status, save_status
     from progress_display import display_progress
@@ -392,26 +406,28 @@ def batch_ocr_pdfs(input_dir: str, output_dir: str, use_gpu: bool = False, langu
 
     try:
         for idx, input_pdf in enumerate(pdf_files, start=1):
-            # Hier wird der Pause-Status geprüft
-            if pause_callback:
-                while pause_callback():
-                    time.sleep(1)  # Warte solange, bis die Pause beendet ist
+            # Blockiere hier, falls pausiert
+            if pause_event:
+                pause_event.wait()
 
             if input_pdf in processed:
                 continue
 
-            # Bestimme den Zielpfad, erzeuge nötige Ordner etc.
+            # Bestimme den Zielpfad, erstelle nötige Ordner etc.
             relative_dir = os.path.relpath(os.path.dirname(input_pdf), os.path.abspath(input_dir))
             target_dir = os.path.join(output_dir, relative_dir)
             os.makedirs(target_dir, exist_ok=True)
             output_pdf = os.path.join(target_dir, os.path.basename(input_pdf))
 
-            # Update der Fortschrittsanzeige
             in_progress = input_pdf
             next_items = [pdf for pdf in pdf_files if pdf not in processed and pdf != input_pdf]
-            display_progress(processed, in_progress, next_items, len(processed), total)
 
-            # Verarbeite das aktuelle PDF
+            # Aktualisiere den Status über den Callback (GUI-Update)
+            if update_status_callback:
+                update_status_callback(processed, in_progress, next_items, len(processed), total)
+            else:
+                display_progress(processed, in_progress, next_items, len(processed), total)
+
             apply_ocr_to_pdf(input_pdf, output_pdf, use_gpu=use_gpu, language=language, deskew=deskew, jobs=jobs)
 
             processed.append(input_pdf)
@@ -424,6 +440,7 @@ def batch_ocr_pdfs(input_dir: str, output_dir: str, use_gpu: bool = False, langu
         print("\n⏸ Process interrupted. Saving current status...")
         save_status(status_file, processed)
         print("Status saved. You can resume processing later.")
+
 
 # progress_display.py #
 def display_progress(completed, current, next_items, current_index, total):
