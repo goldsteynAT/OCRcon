@@ -1,7 +1,6 @@
 OCR_Consertis/
 │   .gitignore
 │   README.md
-│   image.png
 │   pyproject.toml
 │   requirements.txt
 │   ├───logs/
@@ -14,15 +13,20 @@ OCR_Consertis/
 │   │   ├───ocr_consertis/
 │   │   │   __init__.py
 │   │   │   gui.py
+│   │   │   image.png
 │   │   │   main.py
+│   │   │   model.py
 │   │   │   ocr_processing.py
 │   │   │   progress_display.py
 │   │   │   status_manager.py
+│   │   │   viewmodel.py
 │   │   │   ├───__pycache__/
 │   │   │   │   folder_selector.cpython-312.pyc
 │   │   │   │   gui.cpython-312.pyc
+│   │   │   │   model.cpython-312.pyc
 │   │   │   │   ocr_processing.cpython-312.pyc
 │   │   │   │   progress_display.cpython-312.pyc
 │   │   │   │   status_manager.cpython-312.pyc
+│   │   │   │   viewmodel.cpython-312.pyc
 │   ├───tests/
 │   │   __init__.py
