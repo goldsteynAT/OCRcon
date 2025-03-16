@@ -131,15 +131,39 @@ class OCRGUI(TkinterDnD.Tk):
         self.progress = ttk.Progressbar(self, length=600, mode='determinate')
         self.progress.pack(pady=10)
 
-        # Neue Status Table oberhalb der Logbox
-        self.status_table_frame = ttk.Frame(self)
-        self.status_table_frame.pack(fill=tk.BOTH, padx=10, pady=(10, 0))
-        self.status_table = ttk.Treeview(self.status_table_frame, columns=("Status", "File"), show="headings")
-        self.status_table.heading("Status", text="Status")
-        self.status_table.heading("File", text="File Path")
-        self.status_table.column("Status", width=100)
-        self.status_table.column("File", width=600)
-        self.status_table.pack(fill=tk.BOTH, expand=True)
+        # Label für aktuell verarbeitete PDF oberhalb des Notebooks
+        self.current_label = ttk.Label(self, text="Currently Processing: None", font=("Segoe UI", 10))
+        self.current_label.pack(fill=tk.X, padx=10, pady=(10, 0))
+
+        # Notebook für Statusanzeigen (Next / Completed)
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=(5, 10))
+
+        # Tab für Next PDFs
+        self.next_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.next_frame, text="Next")
+        # Label für Anzahl der Next PDFs
+        self.next_status_label = ttk.Label(self.next_frame, text="Number of PDFs to be processed: 0", font=("Segoe UI", 10))
+        self.next_status_label.pack(fill=tk.X, padx=5, pady=(5, 0))
+        # Treeview ohne Header
+        self.next_tree = ttk.Treeview(self.next_frame, columns=("File",), show="tree")
+        self.next_tree.pack(fill=tk.BOTH, expand=True)
+        self.next_scrollbar = ttk.Scrollbar(self.next_frame, orient=tk.VERTICAL, command=self.next_tree.yview)
+        self.next_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.next_tree.config(yscrollcommand=self.next_scrollbar.set)
+
+        # Tab für Completed PDFs
+        self.completed_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.completed_frame, text="Completed")
+        # Label für Anzahl der Completed PDFs
+        self.completed_status_label = ttk.Label(self.completed_frame, text="Number of completed PDFs: 0", font=("Segoe UI", 10))
+        self.completed_status_label.pack(fill=tk.X, padx=5, pady=(5, 0))
+        # Treeview ohne Header
+        self.completed_tree = ttk.Treeview(self.completed_frame, columns=("File",), show="tree")
+        self.completed_tree.pack(fill=tk.BOTH, expand=True)
+        self.completed_scrollbar = ttk.Scrollbar(self.completed_frame, orient=tk.VERTICAL, command=self.completed_tree.yview)
+        self.completed_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.completed_tree.config(yscrollcommand=self.completed_scrollbar.set)
 
         # Log-Ausgabe mit separatem Frame und eigener Scrollbar
         self.log_frame = ttk.Frame(self)
@@ -166,20 +190,28 @@ class OCRGUI(TkinterDnD.Tk):
         self.resume_event.set()  # Initial set – d.h. nicht pausiert
 
     def update_status_table(self, completed, current, next_items, current_index, total):
-        """Updates the status table with the conversion state."""
-        # Clear current rows
-        for row in self.status_table.get_children():
-            self.status_table.delete(row)
-        # Add rows for each category
-        for file in completed:
-            self.status_table.insert("", tk.END, values=("Completed", file))
-        if current:
-            self.status_table.insert("", tk.END, values=("In Progress", current))
+        """Updates the status display in the Notebook and current label."""
+        # Update current processing file
+        self.current_label.config(text="Currently Processing: " + (current if current else "None"))
+        
+        # Update Next Tab label
+        self.next_status_label.config(text=f"Number of PDFs to be processed: {len(next_items)}")
+        # Update Next Tab Treeview
+        for row in self.next_tree.get_children():
+            self.next_tree.delete(row)
         for file in next_items:
-            self.status_table.insert("", tk.END, values=("Next", file))
+            self.next_tree.insert("", tk.END, text=file)
+            
+        # Update Completed Tab label
+        self.completed_status_label.config(text=f"Number of completed PDFs: {len(completed)}")
+        # Update Completed Tab Treeview
+        for row in self.completed_tree.get_children():
+            self.completed_tree.delete(row)
+        for file in completed:
+            self.completed_tree.insert("", tk.END, text=file)
 
     def schedule_update_status(self, completed, current, next_items, current_index, total):
-        """Schedules an update of the status table in the main thread."""
+        """Schedules an update of the status display in the main thread."""
         self.after(0, lambda: self.update_status_table(completed, current, next_items, current_index, total))
 
     def has_subfolder(self, folder):
@@ -197,7 +229,6 @@ class OCRGUI(TkinterDnD.Tk):
         """Fügt den Root-Ordner in die Treeview ein und lädt ggf. einen Dummy-Knoten für Lazy Loading."""
         self.input_tree.insert("", "end", iid=folder, text=folder)
         if self.has_subfolder(folder):
-            # Dummy-Knoten hinzufügen, um anzuzeigen, dass Unterordner vorhanden sind
             self.input_tree.insert(folder, "end", text="dummy")
 
     def handle_drop(self, event):
@@ -217,7 +248,6 @@ class OCRGUI(TkinterDnD.Tk):
         item = self.input_tree.focus()
         children = self.input_tree.get_children(item)
         if children:
-            # Prüfe, ob der erste Kindknoten ein Dummy ist
             first_child = children[0]
             if self.input_tree.item(first_child, "text") == "dummy":
                 self.input_tree.delete(first_child)
@@ -303,7 +333,7 @@ class OCRGUI(TkinterDnD.Tk):
                 language="deu+eng",
                 deskew=True,
                 jobs=4,
-                pause_event=self.resume_event,  # Übergibt das Event für Pause/Resume
+                pause_event=self.resume_event,
                 update_status_callback=lambda completed, current, next_items, current_index, total: 
                     self.schedule_update_status(completed, current, next_items, current_index, total)
             )

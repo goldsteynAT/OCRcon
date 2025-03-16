@@ -39,33 +39,30 @@ class OCRGUI(TkinterDnD.Tk):
 
         # Logo-Frame für die zentrale Positionierung
         self.logo_frame = ttk.Frame(self)
-        self.logo_frame.pack(fill="x", pady=10)  # Volle Breite für zentrierte Platzierung
-
-        # Bild laden und prozentual skalieren
+        self.logo_frame.pack(fill="x", pady=10)
         image = Image.open(logo_path)
-        original_width, original_height = image.size  # Originalgröße holen
-
-        scale_factor = 0.3  # Skalierungsfaktor (30% der Originalgröße)
+        original_width, original_height = image.size
+        scale_factor = 0.3
         new_width = int(original_width * scale_factor)
         new_height = int(original_height * scale_factor)
-
-        image = image.resize((new_width, new_height), Image.LANCZOS)  # Proportionale Skalierung
+        image = image.resize((new_width, new_height), Image.LANCZOS)
         self.logo_image = ImageTk.PhotoImage(image)
-
-        # Label für das Logo zentriert platzieren
         self.logo_label = ttk.Label(self.logo_frame, image=self.logo_image)
-        self.logo_label.pack(anchor="center")  # Mittig ausrichten
+        self.logo_label.pack(anchor="center")
 
         # Übergeordneter Frame für Quell- und Zielordner
         self.folder_frame = ttk.Frame(self, borderwidth=1, relief="solid")
         self.folder_frame.pack(fill=tk.X, padx=10, pady=10)
 
-        # Input Folder Frame (mit Label, Treeview und Buttons)
+        # Input Folder Frame (mit Label, Treeview, Buttons und Status-Label)
         self.input_frame = ttk.Frame(self.folder_frame)
         self.input_frame.pack(fill=tk.X, padx=5, pady=5)
 
         self.input_label_desc = ttk.Label(self.input_frame, text="📂 Input Folders:", font=("Segoe UI Emoji", 12), anchor="w")
         self.input_label_desc.pack(fill=tk.X, padx=5, pady=(5, 0))
+        # Neues Status-Label für die Input Folder Box (rechts oben)
+        self.input_status_label = ttk.Label(self.input_frame, text="Total PDFs: 0, To be processed: 0", font=("Segoe UI", 10))
+        self.input_status_label.pack(fill=tk.X, padx=5, pady=(0,5), anchor="ne")
 
         # Treeview für hierarchische Ordnerstruktur
         self.input_tree_frame = ttk.Frame(self.input_frame)
@@ -81,16 +78,13 @@ class OCRGUI(TkinterDnD.Tk):
         # Registriere Treeview als Drop-Ziel
         self.input_tree.drop_target_register(DND_FILES)
         self.input_tree.dnd_bind('<<Drop>>', self.handle_drop)
-        # Binde Expand-Ereignis zum Lazy Loading
         self.input_tree.bind("<<TreeviewOpen>>", self.on_treeview_open)
 
-        # Button-Frame für Add/Remove-Buttons, rechtsbündig
+        # Button-Frame für Add/Remove-Buttons
         self.input_buttons_frame = ttk.Frame(self.input_frame)
         self.input_buttons_frame.pack(fill=tk.X, padx=5, pady=5, anchor="e")
-
         self.remove_input_button = ttk.Button(self.input_buttons_frame, text="➖ Remove Folder", command=self.remove_input)
         self.remove_input_button.pack(side=tk.RIGHT, padx=5)
-
         self.select_input_button = ttk.Button(self.input_buttons_frame, text="➕ Add Folder", command=self.select_input)
         self.select_input_button.pack(side=tk.RIGHT, padx=5)
 
@@ -98,27 +92,22 @@ class OCRGUI(TkinterDnD.Tk):
         self.separator = ttk.Separator(self.folder_frame, orient="horizontal")
         self.separator.pack(fill="x", padx=5, pady=5)
 
-        # Output Folder Frame (mit Label, Entry und Button)
+        # Output Folder Frame
         self.output_frame = ttk.Frame(self.folder_frame)
         self.output_frame.pack(fill=tk.X, padx=5, pady=5)
-
-        self.output_label_desc = ttk.Label(self.output_frame, text="📁 Zielordner:", font=("Segoe UI Emoji", 12), anchor="w")
+        self.output_label_desc = ttk.Label(self.output_frame, text="📁 Output Folder:", font=("Segoe UI Emoji", 12), anchor="w")
         self.output_label_desc.pack(fill=tk.X, padx=5, pady=(5, 0))
-
         self.output_entry = ttk.Entry(self.output_frame, state="readonly")
         self.output_entry.pack(fill=tk.X, padx=5, pady=(5, 0))
-
-        self.select_output_button = ttk.Button(self.output_frame, text="🔎 Durchsuchen", command=self.select_output)
+        self.select_output_button = ttk.Button(self.output_frame, text="🔎 Browse", command=self.select_output)
         self.select_output_button.pack(anchor="e", padx=5, pady=5)
 
-        # --- Steuerungselemente (Start, Pause, Resume) ---
+        # Steuerungselemente (Start, Pause, Resume)
         self.control_frame = ttk.Frame(self, style="TFrame")
         self.control_frame.pack(pady=10)
-
         self.start_button = ttk.Button(self.control_frame, text="🚀 Start OCR", command=self.start_ocr)
         self.pause_button = ttk.Button(self.control_frame, text="⏸️ Pause", command=self.pause_ocr, state=DISABLED)
-        self.resume_button = ttk.Button(self.control_frame, text="🔄 Fortsetzen", command=self.resume_ocr, state=DISABLED)
-
+        self.resume_button = ttk.Button(self.control_frame, text="🔄 Resume", command=self.resume_ocr, state=DISABLED)
         self.start_button.pack(side=tk.LEFT, padx=5)
         self.pause_button.pack(side=tk.LEFT, padx=5)
         self.resume_button.pack(side=tk.LEFT, padx=5)
@@ -128,90 +117,90 @@ class OCRGUI(TkinterDnD.Tk):
         self.progress.pack(pady=10)
 
         # Label für aktuell verarbeitete PDF oberhalb des Notebooks
-        self.current_label = ttk.Label(self, text="Currently Processing: None", font=("Segoe UI", 10))
+        self.current_label = ttk.Label(self, text="Currently Processing: None", font=("Segoe UI", 10), anchor="center", justify="center")
         self.current_label.pack(fill=tk.X, padx=10, pady=(10, 0))
+
 
         # Notebook für Statusanzeigen (Next / Completed)
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=(5, 10))
-
         # Tab für Next PDFs
         self.next_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.next_frame, text="Next")
-        # Label für Anzahl der Next PDFs
         self.next_status_label = ttk.Label(self.next_frame, text="Number of PDFs to be processed: 0", font=("Segoe UI", 10))
         self.next_status_label.pack(fill=tk.X, padx=5, pady=(5, 0))
-        # Treeview ohne Header
         self.next_tree = ttk.Treeview(self.next_frame, columns=("File",), show="tree")
         self.next_tree.pack(fill=tk.BOTH, expand=True)
         self.next_scrollbar = ttk.Scrollbar(self.next_frame, orient=tk.VERTICAL, command=self.next_tree.yview)
         self.next_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.next_tree.config(yscrollcommand=self.next_scrollbar.set)
-
         # Tab für Completed PDFs
         self.completed_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.completed_frame, text="Completed")
-        # Label für Anzahl der Completed PDFs
         self.completed_status_label = ttk.Label(self.completed_frame, text="Number of completed PDFs: 0", font=("Segoe UI", 10))
         self.completed_status_label.pack(fill=tk.X, padx=5, pady=(5, 0))
-        # Treeview ohne Header
         self.completed_tree = ttk.Treeview(self.completed_frame, columns=("File",), show="tree")
         self.completed_tree.pack(fill=tk.BOTH, expand=True)
         self.completed_scrollbar = ttk.Scrollbar(self.completed_frame, orient=tk.VERTICAL, command=self.completed_tree.yview)
         self.completed_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.completed_tree.config(yscrollcommand=self.completed_scrollbar.set)
 
-        # Log-Ausgabe mit separatem Frame und eigener Scrollbar
+        # Log-Ausgabe
         self.log_frame = ttk.Frame(self)
         self.log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
         self.log_text = tk.Text(self.log_frame, wrap=tk.WORD, height=15)
         self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
         self.log_scrollbar = ttk.Scrollbar(self.log_frame, orient=tk.VERTICAL, command=self.log_text.yview)
         self.log_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
         self.log_text.config(yscrollcommand=self.log_scrollbar.set)
         self.log_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Umleitung von stdout/stderr auf das Log-Textfeld
         sys.stdout = RedirectText(self.log_text)
         sys.stderr = RedirectText(self.log_text)
 
         # OCR-Thread und Steuerungsvariablen
         self.ocr_thread = None
         self.running = False
-        # Verwende ein threading.Event für Pause/Resume-Steuerung:
         self.resume_event = threading.Event()
-        self.resume_event.set()  # Initial set – d.h. nicht pausiert
+        self.resume_event.set()
+
+    def update_input_folder_status(self):
+        """Berechnet und aktualisiert die Gesamtzahl der PDFs und die noch zu verarbeitenden PDFs in den Input-Folders."""
+        total = 0
+        for folder in self.input_folders:
+            for root, dirs, files in os.walk(folder):
+                total += sum(1 for file in files if file.lower().endswith('.pdf'))
+        
+        # Lade die bereits verarbeiteten PDFs aus der Statusdatei
+        from status_manager import load_status
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        logs_dir = os.path.join(project_root, "logs")
+        status_file = os.path.join(logs_dir, "ocr_status.json")
+        processed_list = load_status(status_file)
+        processed_count = len(processed_list)
+        
+        to_be_processed = total - processed_count
+        self.input_status_label.config(text=f"Total PDFs: {total}, To be processed: {to_be_processed}")
+
+
 
     def update_status_table(self, completed, current, next_items, current_index, total):
         """Updates the status display in the Notebook and current label."""
-        # Update current processing file
         self.current_label.config(text="Currently Processing: " + (current if current else "None"))
-        
-        # Update Next Tab label
         self.next_status_label.config(text=f"Number of PDFs to be processed: {len(next_items)}")
-        # Update Next Tab Treeview
         for row in self.next_tree.get_children():
             self.next_tree.delete(row)
         for file in next_items:
             self.next_tree.insert("", tk.END, text=file)
-            
-        # Update Completed Tab label
         self.completed_status_label.config(text=f"Number of completed PDFs: {len(completed)}")
-        # Update Completed Tab Treeview
         for row in self.completed_tree.get_children():
             self.completed_tree.delete(row)
         for file in completed:
             self.completed_tree.insert("", tk.END, text=file)
 
     def schedule_update_status(self, completed, current, next_items, current_index, total):
-        """Schedules an update of the status display in the main thread."""
         self.after(0, lambda: self.update_status_table(completed, current, next_items, current_index, total))
 
     def has_subfolder(self, folder):
-        """Prüft, ob der Ordner mindestens einen Unterordner enthält."""
         try:
             for entry in os.listdir(folder):
                 full_path = os.path.join(folder, entry)
@@ -222,13 +211,11 @@ class OCRGUI(TkinterDnD.Tk):
             return False
 
     def insert_folder(self, folder):
-        """Fügt den Root-Ordner in die Treeview ein und lädt ggf. einen Dummy-Knoten für Lazy Loading."""
         self.input_tree.insert("", "end", iid=folder, text=folder)
         if self.has_subfolder(folder):
             self.input_tree.insert(folder, "end", text="dummy")
 
     def handle_drop(self, event):
-        """Verarbeitet Drag & Drop: Fügt abgelegte Ordner hinzu."""
         dropped_files = self.tk.splitlist(event.data)
         for file in dropped_files:
             if os.path.isdir(file):
@@ -238,9 +225,9 @@ class OCRGUI(TkinterDnD.Tk):
                     message = f"Added folder: {file}\n"
                     print(message)
                     sys.__stdout__.write(message)
+        self.update_input_folder_status()
 
     def on_treeview_open(self, event):
-        """Lädt Unterordner, wenn ein Knoten erweitert wird."""
         item = self.input_tree.focus()
         children = self.input_tree.get_children(item)
         if children:
@@ -250,7 +237,6 @@ class OCRGUI(TkinterDnD.Tk):
                 self.load_subfolders(item)
 
     def load_subfolders(self, parent):
-        """Lädt die Unterordner des angegebenen Parent-Ordners in die Treeview."""
         folder = self.input_tree.item(parent, "text")
         try:
             for entry in os.listdir(folder):
@@ -265,7 +251,6 @@ class OCRGUI(TkinterDnD.Tk):
             sys.__stdout__.write(message)
 
     def select_input(self):
-        """Öffnet den Ordner-Auswahldialog und fügt den gewählten Ordner hinzu."""
         folder = filedialog.askdirectory(title="Select Input Folder")
         if folder:
             if folder not in self.input_folders:
@@ -274,9 +259,9 @@ class OCRGUI(TkinterDnD.Tk):
                 message = f"Added folder: {folder}\n"
                 print(message)
                 sys.__stdout__.write(message)
+            self.update_input_folder_status()
 
     def remove_input(self):
-        """Entfernt den ausgewählten Ordner (Root-Knoten) aus der Treeview und der internen Liste."""
         selected = self.input_tree.selection()
         if not selected:
             message = "No folder selected to remove.\n"
@@ -291,6 +276,7 @@ class OCRGUI(TkinterDnD.Tk):
             message = f"Removed folder: {node}\n"
             print(message)
             sys.__stdout__.write(message)
+        self.update_input_folder_status()
 
     def select_output(self):
         folder = filedialog.askdirectory(title="Select Output Folder")
@@ -340,13 +326,13 @@ class OCRGUI(TkinterDnD.Tk):
         self.resume_button.config(state=DISABLED)
 
     def pause_ocr(self):
-        self.resume_event.clear()  # Blockiert den OCR-Thread
+        self.resume_event.clear()
         self.pause_button.config(state=DISABLED)
         self.resume_button.config(state=NORMAL)
         print("OCR processing paused.\n")
 
     def resume_ocr(self):
-        self.resume_event.set()  # Gibt den OCR-Thread frei
+        self.resume_event.set()
         self.pause_button.config(state=NORMAL)
         self.resume_button.config(state=DISABLED)
         print("OCR processing resumed.\n")
