@@ -8,6 +8,7 @@ OCR_Consertis/
 │   │   #export_project.py
 │   │   all.txt
 │   │   ocr_status.json
+│   │   ocr_status_current.json
 │   │   vzs.txt
 │   ├───src/
 │   │   ├───ocr_consertis/

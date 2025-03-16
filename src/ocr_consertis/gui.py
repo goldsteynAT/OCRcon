@@ -163,23 +163,48 @@ class OCRGUI(TkinterDnD.Tk):
         self.resume_event = threading.Event()
         self.resume_event.set()
 
+    def is_pdf_in_input_folders(self, pdf_path):
+        """
+        Returns True if the given PDF (pdf_path) is located in one of the current input folders.
+        """
+        normalized_pdf = os.path.normpath(os.path.abspath(pdf_path))
+        for folder in self.input_folders:
+            normalized_folder = os.path.normpath(os.path.abspath(folder))
+            try:
+                # os.path.commonpath returns the common prefix of the paths
+                common = os.path.commonpath([normalized_pdf, normalized_folder])
+                if common == normalized_folder:
+                    return True
+            except ValueError:
+                # Falls z.B. verschiedene Laufwerke vorliegen, ignoriere diesen Ordner
+                continue
+        return False
+
     def update_input_folder_status(self):
-        """Berechnet und aktualisiert die Gesamtzahl der PDFs und die noch zu verarbeitenden PDFs in den Input-Folders."""
+        """
+        Calculates and updates the total number of PDFs and the number of PDFs to be processed
+        in the currently added input folders. Only PDFs located within the current input folders
+        are considered when subtracting processed PDFs.
+        """
         total = 0
         for folder in self.input_folders:
             for root, dirs, files in os.walk(folder):
                 total += sum(1 for file in files if file.lower().endswith('.pdf'))
         
-        # Lade die bereits verarbeiteten PDFs aus der Statusdatei
+        # Load processed PDFs from the global status file
         from status_manager import load_status
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         logs_dir = os.path.join(project_root, "logs")
         status_file = os.path.join(logs_dir, "ocr_status.json")
         processed_list = load_status(status_file)
-        processed_count = len(processed_list)
+        
+        # Filter the processed PDFs to include only those belonging to the current input folders
+        relevant_processed = [pdf for pdf in processed_list if self.is_pdf_in_input_folders(pdf)]
+        processed_count = len(relevant_processed)
         
         to_be_processed = total - processed_count
         self.input_status_label.config(text=f"Total PDFs: {total}, To be processed: {to_be_processed}")
+
 
 
 
