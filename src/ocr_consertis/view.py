@@ -28,7 +28,7 @@ class OCRView(TkinterDnD.Tk):
         TkinterDnD.Tk.__init__(self)
         style = ttk.Style(theme='flatly')
         self.title("OCRcon - Control. Connect. Consertis.")
-        self.geometry("800x800")
+        self.geometry("800x900")
         
         # Get the ViewModel singleton instance
         self.viewmodel = OCRViewModel()
@@ -270,8 +270,8 @@ class OCRView(TkinterDnD.Tk):
         self.log_separator.pack(fill="x", padx=5, pady=5, before=self.log_frame)
         
         # Add a label for the log section
-        self.log_label = ttk.Label(self.log_frame)
-        self.log_label.pack(fill=tk.X, padx=5, pady=(0, 5), anchor="w")
+        # self.log_label = ttk.Label(self.log_frame, text="Log Output:", font=("Segoe UI", 10))
+        # self.log_label.pack(fill=tk.X, padx=5, pady=(0, 5), anchor="w")
         
         # Create a frame to contain the text widget and scrollbar
         self.log_text_container = ttk.Frame(self.log_frame)
