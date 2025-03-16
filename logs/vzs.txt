@@ -1,13 +1,25 @@
 OCR_Consertis/
 │   .gitignore
 │   README.md
-│   image.png
+│   poetry.lock
 │   pyproject.toml
 │   requirements.txt
+│   ├───graphics/
+│   │   Consertis_Logo_Slogan_Aufzeichnung.gif
+│   │   Consertis_Logo_Slogan_Aufzeichnung.mp4
+│   │   OCR_Consertis.png
+│   │   OCR_Consertis_with_Slogan.png
+│   │   OCR_animiert_blau.gif
+│   │   OCR_animiert_blau_hq.gif
+│   │   OCR_animiert_bunt.gif
+│   │   OCR_animiert_bunt_hq.gif
 │   ├───logs/
 │   │   #export_project.py
 │   │   all.txt
 │   │   vzs.txt
+│   ├───path/
+│   │   ├───to/
+│   │   │   ├───output_folder/
 │   ├───src/
 │   │   ├───ocr_consertis/
 │   │   │   __init__.py
@@ -19,13 +31,13 @@ OCR_Consertis/
 │   │   │   │   ocr_status.json
 │   │   │   │   ocr_status_current.json
 │   │   │   ├───__pycache__/
-│   │   │   │   folder_selector.cpython-312.pyc
-│   │   │   │   gui.cpython-312.pyc
-│   │   │   │   model.cpython-312.pyc
-│   │   │   │   ocr_processing.cpython-312.pyc
-│   │   │   │   progress_display.cpython-312.pyc
-│   │   │   │   status_manager.cpython-312.pyc
-│   │   │   │   view.cpython-312.pyc
-│   │   │   │   viewmodel.cpython-312.pyc
+│   │   │   │   gui.cpython-310.pyc
+│   │   │   │   model.cpython-310.pyc
+│   │   │   │   ocr_processing.cpython-310.pyc
+│   │   │   │   pdf_processing.cpython-310.pyc
+│   │   │   │   progress_display.cpython-310.pyc
+│   │   │   │   status_manager.cpython-310.pyc
+│   │   │   │   view.cpython-310.pyc
+│   │   │   │   viewmodel.cpython-310.pyc
 │   ├───tests/
 │   │   __init__.py

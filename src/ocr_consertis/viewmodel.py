@@ -24,7 +24,8 @@ class OCRViewModel:
         self.use_gpu = False
         self.language = "deu+eng"
         self.deskew = True
-        self.jobs = 4
+        self.jobs = 4  # Default number of parallel jobs
+        self.ocr_threads = 1  # Default number of threads per PDF
         
         # Thread for OCR processing
         self.ocr_thread = None
@@ -68,7 +69,7 @@ class OCRViewModel:
             self.time_subscribers.remove(callback)
     
     def notify_status_update(self, completed: List[str], current: Optional[str], 
-                            next_items: List[str], current_index: int, total: int) -> None:
+                               next_items: List[str], current_index: int, total: int) -> None:
         """Notify all subscribers about a status update."""
         for callback in self.status_subscribers:
             callback(completed, current, next_items, current_index, total)
@@ -79,9 +80,9 @@ class OCRViewModel:
             callback(progress)
     
     def notify_time_update(self, elapsed_time: float, 
-                          estimated_time: float, 
-                          current_index: int, 
-                          total: int) -> None:
+                           estimated_time: float, 
+                           current_index: int, 
+                           total: int) -> None:
         """Notify all subscribers about a time update."""
         for callback in self.time_subscribers:
             callback(elapsed_time, estimated_time, current_index, self.to_be_processed_count)
@@ -196,7 +197,7 @@ class OCRViewModel:
             use_gpu=self.use_gpu,
             language=self.language,
             deskew=self.deskew,
-            jobs=self.jobs,
+            jobs=self.jobs,  # Number of PDFs to process in parallel
             status_callback=status_callback
         )
         
@@ -228,3 +229,14 @@ class OCRViewModel:
         """Clean up current session data."""
         self.timer_running = False
         self.model.cleanup_current_session()
+    
+    # Setter methods for parallel processing parameters
+    def set_parallel_jobs(self, jobs: int) -> None:
+        """Set the number of PDFs to process in parallel."""
+        if jobs > 0:
+            self.jobs = jobs
+    
+    def set_ocr_threads(self, threads: int) -> None:
+        """Set the number of threads to use per PDF processing."""
+        if threads > 0:
+            self.ocr_threads = threads

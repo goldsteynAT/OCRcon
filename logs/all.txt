@@ -16,6 +16,7 @@ import json
 import ocrmypdf
 import time
 from typing import List, Callable, Optional, Tuple
+from datetime import datetime, timedelta
 
 class OCRModel:
     """Model class handling the OCR processing and status management."""
@@ -41,6 +42,12 @@ class OCRModel:
         
         # Clear the current session file on startup
         self.save_status(self.current_status_file, [])
+        
+        # Time tracking variables
+        self.start_time = None
+        self.pause_time = None
+        self.total_pause_time = timedelta(0)
+        self.processing_times = []  # List to store processing time for each PDF
     
     def load_status(self, status_file: str) -> List[str]:
         """Load the list of processed PDFs from a JSON status file."""
@@ -97,6 +104,7 @@ class OCRModel:
     def apply_ocr_to_pdf(self, input_pdf: str, output_pdf: str, use_gpu: bool = False, 
                          language: str = "deu+eng", deskew: bool = True, jobs: int = 1) -> bool:
         """Apply OCR to a PDF file and return success status."""
+        pdf_start_time = time.time()
         try:
             if use_gpu:
                 ocrmypdf.ocr(
@@ -117,6 +125,11 @@ class OCRModel:
                     jobs=jobs
                 )
             print(f"✅ OCR applied: {input_pdf} -> {output_pdf}")
+            
+            # Record processing time for this PDF
+            processing_time = time.time() - pdf_start_time
+            self.processing_times.append(processing_time)
+            
             return True
         except Exception as e:
             print(f"❌ Error processing {input_pdf}: {e}")
@@ -148,6 +161,45 @@ class OCRModel:
         to_be_processed = total - processed_count
         return total, to_be_processed
     
+    def get_time_stats(self) -> Tuple[float, float, float]:
+        """
+        Get time statistics for OCR processing.
+        
+        Returns:
+            Tuple containing:
+            - elapsed_time: Time elapsed since start in seconds
+            - avg_time_per_pdf: Average time per PDF in seconds
+            - estimated_time_remaining: Estimated time remaining in seconds
+        """
+        if not self.start_time:
+            return 0, 0, 0
+        
+        # Calculate elapsed time (accounting for pauses)
+        if self.paused and self.pause_time:
+            current_time = self.pause_time
+        else:
+            current_time = datetime.now()
+        
+        elapsed_time = (current_time - self.start_time - self.total_pause_time).total_seconds()
+        
+        # Calculate average processing time per PDF
+        if self.processing_times:
+            avg_time_per_pdf = sum(self.processing_times) / len(self.processing_times)
+        elif self.processed_pdfs:
+            # Fallback if we don't have detailed processing times
+            avg_time_per_pdf = elapsed_time / len(self.processed_pdfs)
+        else:
+            avg_time_per_pdf = 0
+        
+        # Calculate estimated time remaining
+        if avg_time_per_pdf > 0 and len(self.all_pdfs) > len(self.processed_pdfs):
+            remaining_pdfs = len(self.all_pdfs) - len(self.processed_pdfs)
+            estimated_time_remaining = remaining_pdfs * avg_time_per_pdf
+        else:
+            estimated_time_remaining = 0
+        
+        return elapsed_time, avg_time_per_pdf, estimated_time_remaining
+    
     def start_ocr_process(self, input_folders: List[str], output_dir: str, 
                         use_gpu: bool = False, language: str = "deu+eng", 
                         deskew: bool = True, jobs: int = 1,
@@ -159,6 +211,12 @@ class OCRModel:
         
         self.running = True
         self.paused = False
+        
+        # Reset time tracking
+        self.start_time = datetime.now()
+        self.pause_time = None
+        self.total_pause_time = timedelta(0)
+        self.processing_times = []
         
         # Collect all PDFs
         self.all_pdfs = self.collect_pdfs(input_folders)
@@ -252,13 +310,20 @@ class OCRModel:
     
     def pause_processing(self) -> None:
         """Pause the OCR processing."""
-        self.paused = True
-        print("OCR processing paused.\n")
+        if not self.paused:
+            self.paused = True
+            self.pause_time = datetime.now()
+            print("OCR processing paused.\n")
     
     def resume_processing(self) -> None:
         """Resume the OCR processing."""
-        self.paused = False
-        print("OCR processing resumed.\n")
+        if self.paused:
+            self.paused = False
+            if self.pause_time:
+                pause_duration = datetime.now() - self.pause_time
+                self.total_pause_time += pause_duration
+                self.pause_time = None
+            print("OCR processing resumed.\n")
     
     def stop_processing(self) -> None:
         """Stop the OCR processing completely."""
@@ -304,7 +369,7 @@ class OCRView(TkinterDnD.Tk):
         TkinterDnD.Tk.__init__(self)
         style = ttk.Style(theme='flatly')
         self.title("OCRcon - Control. Connect. Consertis.")
-        self.geometry("800x800")
+        self.geometry("800x900")
         
         # Get the ViewModel singleton instance
         self.viewmodel = OCRViewModel()
@@ -322,6 +387,7 @@ class OCRView(TkinterDnD.Tk):
         # Register callbacks with ViewModel
         self.viewmodel.add_status_subscriber(self.update_status)
         self.viewmodel.add_progress_subscriber(self.update_progress)
+        self.viewmodel.add_time_subscriber(self.update_time_stats)
         
         # Register window close event
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -431,7 +497,20 @@ class OCRView(TkinterDnD.Tk):
         
         # Progress bar
         self.progress = ttk.Progressbar(self, length=600, mode='determinate')
-        self.progress.pack(pady=10)
+        self.progress.pack(pady=(10, 5))
+        
+        # Detailed status label under progress bar
+        self.detailed_status_frame = ttk.Frame(self)
+        self.detailed_status_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        self.detailed_status_label = ttk.Label(
+            self.detailed_status_frame, 
+            text="0/0 PDFs processed [0.0%] - 0s passed - estimated time until completion: 0s",
+            font=("Segoe UI", 10),
+            anchor="center",
+            justify="center"
+        )
+        self.detailed_status_label.pack(fill=tk.X)
     
     def _create_notebook_section(self):
         """Create the notebook with tabs for next, completed and total completed PDFs."""
@@ -439,9 +518,13 @@ class OCRView(TkinterDnD.Tk):
         self.current_label = ttk.Label(self, text="Currently Processing: None", font=("Segoe UI", 10), anchor="center", justify="center")
         self.current_label.pack(fill=tk.X, padx=10, pady=(10, 0))
         
+        # Create a frame to contain both notebook and log sections
+        self.content_frame = ttk.Frame(self, borderwidth=1, relief="solid")
+        self.content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
         # Notebook for status displays (Next / Completed / Total Completed)
-        self.notebook = ttk.Notebook(self)
-        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=(5, 10))
+        self.notebook = ttk.Notebook(self.content_frame)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         # Tab for Next PDFs
         self.next_frame = ttk.Frame(self.notebook)
@@ -450,13 +533,22 @@ class OCRView(TkinterDnD.Tk):
         self.next_status_label = ttk.Label(self.next_frame, text="Number of PDFs to be processed: 0", font=("Segoe UI", 10))
         self.next_status_label.pack(fill=tk.X, padx=5, pady=(5, 0))
         
-        self.next_tree = ttk.Treeview(self.next_frame, columns=("File",), show="tree")
-        self.next_tree.column("#0", width=800, minwidth=400, stretch=True)
-        self.next_tree.pack(fill=tk.BOTH, expand=True)
+        # Create a frame to contain the tree and scrollbar for proper layout
+        self.next_tree_container = ttk.Frame(self.next_frame)
+        self.next_tree_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        self.next_scrollbar = ttk.Scrollbar(self.next_frame, orient=tk.VERTICAL, command=self.next_tree.yview)
+        # Add scrollbar first (right side)
+        self.next_scrollbar = ttk.Scrollbar(self.next_tree_container, orient=tk.VERTICAL)
         self.next_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.next_tree.config(yscrollcommand=self.next_scrollbar.set)
+        
+        # Add tree with attached scrollbar
+        self.next_tree = ttk.Treeview(self.next_tree_container, columns=("File",), show="tree", 
+                                     yscrollcommand=self.next_scrollbar.set)
+        self.next_tree.column("#0", width=800, minwidth=400, stretch=True)
+        self.next_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Connect scrollbar to tree
+        self.next_scrollbar.config(command=self.next_tree.yview)
         
         # Tab for Completed PDFs (current session)
         self.completed_frame = ttk.Frame(self.notebook)
@@ -465,13 +557,22 @@ class OCRView(TkinterDnD.Tk):
         self.completed_status_label = ttk.Label(self.completed_frame, text="Number of completed PDFs (this session): 0", font=("Segoe UI", 10))
         self.completed_status_label.pack(fill=tk.X, padx=5, pady=(5, 0))
         
-        self.completed_tree = ttk.Treeview(self.completed_frame, columns=("File",), show="tree")
-        self.completed_tree.column("#0", width=800, minwidth=400, stretch=True)
-        self.completed_tree.pack(fill=tk.BOTH, expand=True)
+        # Create a frame to contain the tree and scrollbar for proper layout
+        self.completed_tree_container = ttk.Frame(self.completed_frame)
+        self.completed_tree_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        self.completed_scrollbar = ttk.Scrollbar(self.completed_frame, orient=tk.VERTICAL, command=self.completed_tree.yview)
+        # Add scrollbar first (right side)
+        self.completed_scrollbar = ttk.Scrollbar(self.completed_tree_container, orient=tk.VERTICAL)
         self.completed_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.completed_tree.config(yscrollcommand=self.completed_scrollbar.set)
+        
+        # Add tree with attached scrollbar
+        self.completed_tree = ttk.Treeview(self.completed_tree_container, columns=("File",), show="tree",
+                                         yscrollcommand=self.completed_scrollbar.set)
+        self.completed_tree.column("#0", width=800, minwidth=400, stretch=True)
+        self.completed_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Connect scrollbar to tree
+        self.completed_scrollbar.config(command=self.completed_tree.yview)
         
         # Tab for Total Completed PDFs (all sessions)
         self.total_completed_frame = ttk.Frame(self.notebook)
@@ -482,25 +583,52 @@ class OCRView(TkinterDnD.Tk):
                                                      font=("Segoe UI", 10))
         self.total_completed_status_label.pack(fill=tk.X, padx=5, pady=(5, 0))
         
-        self.total_completed_tree = ttk.Treeview(self.total_completed_frame, columns=("File",), show="tree")
-        self.total_completed_tree.column("#0", width=800, minwidth=400, stretch=True)
-        self.total_completed_tree.pack(fill=tk.BOTH, expand=True)
+        # Create a frame to contain the tree and scrollbar for proper layout
+        self.total_completed_tree_container = ttk.Frame(self.total_completed_frame)
+        self.total_completed_tree_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        self.total_completed_scrollbar = ttk.Scrollbar(self.total_completed_frame, orient=tk.VERTICAL, command=self.total_completed_tree.yview)
+        # Add scrollbar first (right side)
+        self.total_completed_scrollbar = ttk.Scrollbar(self.total_completed_tree_container, orient=tk.VERTICAL)
         self.total_completed_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.total_completed_tree.config(yscrollcommand=self.total_completed_scrollbar.set)
+        
+        # Add tree with attached scrollbar
+        self.total_completed_tree = ttk.Treeview(self.total_completed_tree_container, columns=("File",), show="tree",
+                                               yscrollcommand=self.total_completed_scrollbar.set)
+        self.total_completed_tree.column("#0", width=800, minwidth=400, stretch=True)
+        self.total_completed_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Connect scrollbar to tree
+        self.total_completed_scrollbar.config(command=self.total_completed_tree.yview)
     
     def _create_log_section(self):
         """Create the log output section."""
-        self.log_frame = ttk.Frame(self)
-        self.log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # The log frame now goes inside the content_frame instead of directly in the window
+        self.log_frame = ttk.Frame(self.content_frame)
+        self.log_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        self.log_text = tk.Text(self.log_frame, wrap=tk.WORD, height=15)
+        # Add a separator between notebook and log
+        self.log_separator = ttk.Separator(self.content_frame, orient="horizontal")
+        self.log_separator.pack(fill="x", padx=5, pady=5, before=self.log_frame)
+        
+        # Add a label for the log section
+        # self.log_label = ttk.Label(self.log_frame, text="Log Output:", font=("Segoe UI", 10))
+        # self.log_label.pack(fill=tk.X, padx=5, pady=(0, 5), anchor="w")
+        
+        # Create a frame to contain the text widget and scrollbar
+        self.log_text_container = ttk.Frame(self.log_frame)
+        self.log_text_container.pack(fill=tk.BOTH, expand=True)
+        
+        # Add scrollbar first (right side)
+        self.log_scrollbar = ttk.Scrollbar(self.log_text_container, orient=tk.VERTICAL)
+        self.log_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Add text widget with attached scrollbar
+        self.log_text = tk.Text(self.log_text_container, wrap=tk.WORD, height=10, 
+                              yscrollcommand=self.log_scrollbar.set)
         self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        self.log_scrollbar = ttk.Scrollbar(self.log_frame, orient=tk.VERTICAL, command=self.log_text.yview)
-        self.log_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.log_text.config(yscrollcommand=self.log_scrollbar.set)
+        # Connect scrollbar to text widget
+        self.log_scrollbar.config(command=self.log_text.yview)
         
         # Redirect stdout and stderr to log text widget
         sys.stdout = RedirectText(self.log_text)
@@ -600,7 +728,7 @@ class OCRView(TkinterDnD.Tk):
         for file in completed:
             self.completed_tree.insert("", tk.END, text=file)
         
-        # Hier: Total Completed aktualisieren (global verarbeitete PDFs)
+        # Update Total Completed tab (global processed PDFs)
         self.total_completed_status_label.config(
             text=f"Total number of completed PDFs (all sessions): {len(self.viewmodel.model.global_processed)}"
         )
@@ -617,15 +745,35 @@ class OCRView(TkinterDnD.Tk):
             self.start_button.config(state=NORMAL)
             self.pause_button.config(state=DISABLED)
             self.resume_button.config(state=DISABLED)
-
     
     def update_progress(self, progress):
         """Update the progress bar based on ViewModel data."""
         self.progress['value'] = progress
     
+    def update_time_stats(self, elapsed_time, estimated_time, current_index, to_be_processed):
+        """Update the time statistics display."""
+        # Format the times into human-readable strings
+        elapsed_str = self.viewmodel.format_time(elapsed_time)
+        estimated_str = self.viewmodel.format_time(estimated_time)
+        
+        # Calculate percentage
+        percentage = 0.0
+        if to_be_processed > 0:
+            percentage = (current_index / to_be_processed) * 100
+        
+        # Update the detailed status label
+        self.detailed_status_label.config(
+            text=f"{current_index}/{to_be_processed} PDFs processed [{percentage:.1f}%] - {elapsed_str} passed - estimated time until completion: {estimated_str}"
+        )
+    
     def update_folder_stats(self):
         """Update the folder statistics display."""
         total, to_be_processed = self.viewmodel.update_folder_stats()
+        
+        # If OCR is running, we should keep the original to_be_processed value
+        if self.viewmodel.is_running():
+            to_be_processed = self.viewmodel.to_be_processed_count
+            
         self.input_status_label.config(text=f"Total PDFs: {total}, To be processed: {to_be_processed}")
     
     # Helper methods
@@ -691,6 +839,7 @@ class OCRView(TkinterDnD.Tk):
 import threading
 from typing import List, Callable, Optional, Tuple
 from model import OCRModel
+import time
 
 class OCRViewModel:
     """Singleton ViewModel that mediates between View and Model for the OCR application."""
@@ -721,6 +870,14 @@ class OCRViewModel:
         # Status subscribers (callbacks from view)
         self.status_subscribers = []
         self.progress_subscribers = []
+        self.time_subscribers = []
+        
+        # Timer thread for updating time display
+        self.timer_thread = None
+        self.timer_running = False
+        
+        # Static count of PDFs to be processed (set when OCR starts)
+        self.to_be_processed_count = 0
         
         OCRViewModel._initialized = True
     
@@ -734,12 +891,19 @@ class OCRViewModel:
         if callback not in self.progress_subscribers:
             self.progress_subscribers.append(callback)
     
+    def add_time_subscriber(self, callback: Callable) -> None:
+        """Register a callback function to receive time updates."""
+        if callback not in self.time_subscribers:
+            self.time_subscribers.append(callback)
+    
     def remove_subscriber(self, callback: Callable) -> None:
         """Remove a registered callback."""
         if callback in self.status_subscribers:
             self.status_subscribers.remove(callback)
         if callback in self.progress_subscribers:
             self.progress_subscribers.remove(callback)
+        if callback in self.time_subscribers:
+            self.time_subscribers.remove(callback)
     
     def notify_status_update(self, completed: List[str], current: Optional[str], 
                             next_items: List[str], current_index: int, total: int) -> None:
@@ -751,6 +915,26 @@ class OCRViewModel:
         """Notify all subscribers about a progress update."""
         for callback in self.progress_subscribers:
             callback(progress)
+    
+    def notify_time_update(self, elapsed_time: float, 
+                          estimated_time: float, 
+                          current_index: int, 
+                          total: int) -> None:
+        """Notify all subscribers about a time update."""
+        for callback in self.time_subscribers:
+            callback(elapsed_time, estimated_time, current_index, self.to_be_processed_count)
+    
+    def format_time(self, seconds: float) -> str:
+        """Format seconds into a human-readable time string (HH:MM:SS)."""
+        hours, remainder = divmod(int(seconds), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        
+        if hours > 0:
+            return f"{hours}h {minutes}m {seconds}s"
+        elif minutes > 0:
+            return f"{minutes}m {seconds}s"
+        else:
+            return f"{seconds}s"
     
     def add_input_folder(self, folder: str) -> None:
         """Add a folder to the list of input folders."""
@@ -790,8 +974,10 @@ class OCRViewModel:
             print("OCR process is already running.")
             return False
             
-        # Show initial counts
+        # Store the initial "to be processed" count
         total, to_be_processed = self.update_folder_stats()
+        self.to_be_processed_count = to_be_processed
+        
         print(f"Starting OCR process: {to_be_processed} files to process out of {total} total files")
         
         # Start OCR in a separate thread
@@ -800,7 +986,33 @@ class OCRViewModel:
             daemon=True
         )
         self.ocr_thread.start()
+        
+        # Start the timer thread for updating time information
+        self.timer_running = True
+        self.timer_thread = threading.Thread(
+            target=self._run_timer,
+            daemon=True
+        )
+        self.timer_thread.start()
+        
         return True
+    
+    def _run_timer(self) -> None:
+        """Run a timer to update time information periodically."""
+        while self.timer_running and self.model.running:
+            # Get time statistics from the model
+            elapsed_time, _, estimated_time = self.model.get_time_stats()
+            
+            # Notify subscribers with time information
+            self.notify_time_update(
+                elapsed_time,
+                estimated_time,
+                len(self.model.processed_pdfs),
+                self.to_be_processed_count  # Use the static count
+            )
+            
+            # Sleep for a short period before updating again
+            time.sleep(1)
     
     def _run_ocr_process(self) -> None:
         """Run the OCR process in a thread."""
@@ -811,6 +1023,10 @@ class OCRViewModel:
             self.notify_status_update(completed, current, next_items, current_index, total)
             # Notify about progress update
             self.notify_progress_update(progress)
+            
+            # Get time statistics and notify
+            elapsed_time, _, estimated_time = self.model.get_time_stats()
+            self.notify_time_update(elapsed_time, estimated_time, current_index, total)
         
         self.model.start_ocr_process(
             input_folders=self.input_folders,
@@ -821,6 +1037,9 @@ class OCRViewModel:
             jobs=self.jobs,
             status_callback=status_callback
         )
+        
+        # Stop the timer when OCR processing is done
+        self.timer_running = False
     
     def pause_ocr(self) -> None:
         """Pause the OCR process."""
@@ -833,6 +1052,7 @@ class OCRViewModel:
     def stop_ocr(self) -> None:
         """Stop the OCR process."""
         self.model.stop_processing()
+        self.timer_running = False
     
     def is_running(self) -> bool:
         """Check if OCR processing is running."""
@@ -844,5 +1064,6 @@ class OCRViewModel:
         
     def cleanup_current_session(self) -> None:
         """Clean up current session data."""
+        self.timer_running = False
         self.model.cleanup_current_session()
 

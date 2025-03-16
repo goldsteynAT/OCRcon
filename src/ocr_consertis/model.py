@@ -2,7 +2,9 @@ import os
 import json
 import ocrmypdf
 import time
-from typing import List, Callable, Optional, Tuple
+import threading
+import concurrent.futures
+from typing import List, Callable, Optional, Tuple, Set
 from datetime import datetime, timedelta
 
 class OCRModel:
@@ -35,6 +37,12 @@ class OCRModel:
         self.pause_time = None
         self.total_pause_time = timedelta(0)
         self.processing_times = []  # List to store processing time for each PDF
+        
+        # Initialize lock for thread safety
+        self.lock = threading.Lock()
+        
+        # Set to track currently processing PDFs
+        self.currently_processing: Set[str] = set()
     
     def load_status(self, status_file: str) -> List[str]:
         """Load the list of processed PDFs from a JSON status file."""
@@ -189,9 +197,9 @@ class OCRModel:
     
     def start_ocr_process(self, input_folders: List[str], output_dir: str, 
                         use_gpu: bool = False, language: str = "deu+eng", 
-                        deskew: bool = True, jobs: int = 1,
+                        deskew: bool = True, jobs: int = 4,
                         status_callback: Optional[Callable] = None) -> None:
-        """Start the OCR process for all PDFs in the input folders."""
+        """Start the OCR process for all PDFs in the input folders with parallel processing."""
         if not input_folders or not output_dir:
             print("Please select at least one input folder and an output folder.")
             return
@@ -212,81 +220,95 @@ class OCRModel:
         unprocessed_pdfs = self.get_unprocessed_pdfs(input_folders)
         total = len(self.all_pdfs)
         
+        # Set to track currently processing PDFs
+        self.currently_processing = set()
+        
         # Initial status update to show correct "to be processed" count
         if status_callback:
             in_progress = None
             next_items = unprocessed_pdfs
             status_callback(self.processed_pdfs.copy(), in_progress, next_items, len(self.processed_pdfs), total)
         
-        # Process each PDF from unprocessed list
-        for idx, input_pdf in enumerate(unprocessed_pdfs, start=1):
-            if not self.running:
-                break
+        # Process PDFs in parallel using a thread pool
+        with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
+            # Dictionary to map futures to their PDFs
+            future_to_pdf = {}
+            
+            # Initially submit up to 'jobs' number of PDFs for processing
+            initial_batch = min(jobs, len(unprocessed_pdfs))
+            for i in range(initial_batch):
+                if i < len(unprocessed_pdfs):
+                    pdf = unprocessed_pdfs[i]
+                    # Skip if already processed in current session
+                    if pdf in self.processed_pdfs:
+                        continue
+                        
+                    with self.lock:
+                        self.currently_processing.add(pdf)
+                    
+                    future = executor.submit(
+                        self._process_single_pdf,
+                        pdf, input_folders, output_dir, use_gpu, language, deskew, 1, status_callback, total
+                    )
+                    future_to_pdf[future] = pdf
+            
+            # Process completed futures and submit new ones as needed
+            submitted_pdfs = set(future_to_pdf.values())
+            pdf_index = initial_batch  # Start from the next unsubmitted PDF
+            
+            # While we have futures running and the process hasn't been stopped
+            while future_to_pdf and self.running:
+                # Wait for the next future to complete (with a timeout to check running state)
+                done, not_done = concurrent.futures.wait(
+                    future_to_pdf, 
+                    timeout=0.5, 
+                    return_when=concurrent.futures.FIRST_COMPLETED
+                )
                 
-            while self.paused:
-                time.sleep(0.5)  # Wait while paused
                 if not self.running:
+                    # Cancel all pending futures if we're stopping
+                    for future in not_done:
+                        future.cancel()
                     break
-            
-            # Skip if already processed in current session
-            if input_pdf in self.processed_pdfs:
-                continue
-            
-            # Determine output path, preserving directory structure
-            output_pdf = None
-            for input_dir in input_folders:
-                if self.is_pdf_in_input_folders(input_pdf, [input_dir]):
-                    # 1. Get the input folder name
-                    input_folder_name = os.path.basename(os.path.normpath(input_dir))
+                
+                # For each completed PDF
+                for future in done:
+                    pdf = future_to_pdf.pop(future)
+                    with self.lock:
+                        if pdf in self.currently_processing:
+                            self.currently_processing.remove(pdf)
                     
-                    # 2. Get the relative path from input folder to PDF file
-                    relative_path = os.path.relpath(os.path.dirname(input_pdf), os.path.abspath(input_dir))
-                    
-                    # 3. Create target directory structure
-                    if relative_path == '.':
-                        # PDF is directly in the input folder
-                        target_dir = os.path.join(output_dir, input_folder_name)
-                    else:
-                        # PDF is in a subfolder
-                        target_dir = os.path.join(output_dir, input_folder_name, relative_path)
-                    
-                    # 4. Create the directory and set the output path
-                    os.makedirs(target_dir, exist_ok=True)
-                    output_pdf = os.path.join(target_dir, os.path.basename(input_pdf))
-                    print(f"Processing: {input_pdf}")
-                    print(f"Output to: {output_pdf}")
-                    break
+                    try:
+                        # Get the result and check if processing was successful
+                        success = future.result()
+                        if success:
+                            with self.lock:
+                                self.update_status_files(pdf)
+                                
+                        # Submit a new PDF for processing if available
+                        while pdf_index < len(unprocessed_pdfs) and self.running:
+                            next_pdf = unprocessed_pdfs[pdf_index]
+                            pdf_index += 1
+                            
+                            # Skip if already processed or being processed
+                            if next_pdf in self.processed_pdfs or next_pdf in submitted_pdfs:
+                                continue
+                                
+                            # Submit this PDF for processing
+                            with self.lock:
+                                self.currently_processing.add(next_pdf)
+                            
+                            future = executor.submit(
+                                self._process_single_pdf,
+                                next_pdf, input_folders, output_dir, use_gpu, language, deskew, 1, status_callback, total
+                            )
+                            future_to_pdf[future] = next_pdf
+                            submitted_pdfs.add(next_pdf)
+                            break
+                            
+                    except Exception as e:
+                        print(f"❌ Error processing {pdf}: {e}")
             
-            # Use flat structure as fallback if no matching input folder found
-            if output_pdf is None:
-                output_pdf = os.path.join(output_dir, os.path.basename(input_pdf))
-                os.makedirs(output_dir, exist_ok=True)
-            
-            # Prepare status data for callback
-            in_progress = input_pdf
-            # next_items should exclude ALL previously processed PDFs, not just from current session
-            next_items = [pdf for pdf in self.all_pdfs 
-                         if pdf not in self.global_processed 
-                         and pdf not in self.processed_pdfs
-                         and pdf != input_pdf]
-            
-            # Update status via callback
-            if status_callback:
-                status_callback(self.processed_pdfs.copy(), in_progress, next_items, len(self.processed_pdfs), total)
-            
-            # Process current PDF
-            success = self.apply_ocr_to_pdf(
-                input_pdf, output_pdf, 
-                use_gpu=use_gpu, 
-                language=language, 
-                deskew=deskew, 
-                jobs=jobs
-            )
-            
-            if success:
-                # Update status files
-                self.update_status_files(input_pdf)
-        
         # Final update after completion
         self.running = False
         if status_callback:
@@ -294,6 +316,70 @@ class OCRModel:
         
         if len(self.processed_pdfs) == 0:
             print("All files in the folder are already processed.\n")
+    
+    def _process_single_pdf(self, input_pdf: str, input_folders: List[str], output_dir: str,
+                          use_gpu: bool, language: str, deskew: bool, jobs: int,
+                          status_callback: Optional[Callable], total: int) -> bool:
+        """Process a single PDF file in a separate thread."""
+        if not self.running:
+            return False
+            
+        # Handle pausing
+        while self.paused:
+            time.sleep(0.5)  # Wait while paused
+            if not self.running:
+                return False
+        
+        # Determine output path, preserving directory structure
+        output_pdf = None
+        for input_dir in input_folders:
+            if self.is_pdf_in_input_folders(input_pdf, [input_dir]):
+                # 1. Get the input folder name
+                input_folder_name = os.path.basename(os.path.normpath(input_dir))
+                
+                # 2. Get the relative path from input folder to PDF file
+                relative_path = os.path.relpath(os.path.dirname(input_pdf), os.path.abspath(input_dir))
+                
+                # 3. Create target directory structure
+                if relative_path == '.':
+                    # PDF is directly in the input folder
+                    target_dir = os.path.join(output_dir, input_folder_name)
+                else:
+                    # PDF is in a subfolder
+                    target_dir = os.path.join(output_dir, input_folder_name, relative_path)
+                
+                # 4. Create the directory and set the output path
+                os.makedirs(target_dir, exist_ok=True)
+                output_pdf = os.path.join(target_dir, os.path.basename(input_pdf))
+                print(f"Processing: {input_pdf}")
+                print(f"Output to: {output_pdf}")
+                break
+        
+        # Use flat structure as fallback if no matching input folder found
+        if output_pdf is None:
+            output_pdf = os.path.join(output_dir, os.path.basename(input_pdf))
+            os.makedirs(output_dir, exist_ok=True)
+        
+        # Update status via callback
+        if status_callback:
+            with self.lock:
+                in_progress = list(self.currently_processing)
+                next_items = [pdf for pdf in self.all_pdfs 
+                             if pdf not in self.global_processed 
+                             and pdf not in self.processed_pdfs
+                             and pdf not in self.currently_processing]
+                status_callback(self.processed_pdfs.copy(), in_progress, next_items, len(self.processed_pdfs), total)
+        
+        # Process current PDF
+        success = self.apply_ocr_to_pdf(
+            input_pdf, output_pdf, 
+            use_gpu=use_gpu, 
+            language=language, 
+            deskew=deskew, 
+            jobs=jobs  # This now refers to the number of threads within a single OCR process
+        )
+        
+        return success
     
     def pause_processing(self) -> None:
         """Pause the OCR processing."""

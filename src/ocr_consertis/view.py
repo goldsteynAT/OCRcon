@@ -141,20 +141,36 @@ class OCRView(TkinterDnD.Tk):
     
     def _create_control_section(self):
         """Create the control buttons and progress bar section."""
-        # Control elements (Start, Pause, Resume)
+        # Control parent frame
         self.control_frame = ttk.Frame(self, style="TFrame")
         self.control_frame.pack(pady=10)
         
-        self.start_button = ttk.Button(self.control_frame, text="🚀 Start OCR", command=self.start_ocr)
+        # Create a frame for the main control buttons
+        self.buttons_frame = ttk.Frame(self.control_frame)
+        self.buttons_frame.pack(side=tk.LEFT, padx=5)
+        
+        self.start_button = ttk.Button(self.buttons_frame, text="🚀 Start OCR", command=self.start_ocr)
         self.start_button.pack(side=tk.LEFT, padx=5)
         
-        self.pause_button = ttk.Button(self.control_frame, text="⏸️ Pause", command=self.pause_ocr, state=DISABLED)
+        self.pause_button = ttk.Button(self.buttons_frame, text="⏸️ Pause", command=self.pause_ocr, state=DISABLED)
         self.pause_button.pack(side=tk.LEFT, padx=5)
         
-        self.resume_button = ttk.Button(self.control_frame, text="🔄 Resume", command=self.resume_ocr, state=DISABLED)
+        self.resume_button = ttk.Button(self.buttons_frame, text="🔄 Resume", command=self.resume_ocr, state=DISABLED)
         self.resume_button.pack(side=tk.LEFT, padx=5)
         
-        # Progress bar
+        # Create a frame for parallel processing settings
+        self.parallel_frame = ttk.Frame(self.control_frame)
+        self.parallel_frame.pack(side=tk.RIGHT, padx=5)
+        
+        # Parallel Jobs control
+        self.jobs_label = ttk.Label(self.parallel_frame, text="Parallel PDFs:")
+        self.jobs_label.pack(side=tk.LEFT, padx=(20, 5))
+        
+        self.jobs_var = tk.IntVar(value=4)  # Default to 4 parallel jobs
+        self.jobs_spinbox = ttk.Spinbox(self.parallel_frame, from_=1, to=16, width=3, textvariable=self.jobs_var)
+        self.jobs_spinbox.pack(side=tk.LEFT, padx=5)
+        
+        # Progress bar remains the same
         self.progress = ttk.Progressbar(self, length=600, mode='determinate')
         self.progress.pack(pady=(10, 5))
         
@@ -269,10 +285,6 @@ class OCRView(TkinterDnD.Tk):
         self.log_separator = ttk.Separator(self.content_frame, orient="horizontal")
         self.log_separator.pack(fill="x", padx=5, pady=5, before=self.log_frame)
         
-        # Add a label for the log section
-        # self.log_label = ttk.Label(self.log_frame, text="Log Output:", font=("Segoe UI", 10))
-        # self.log_label.pack(fill=tk.X, padx=5, pady=(0, 5), anchor="w")
-        
         # Create a frame to contain the text widget and scrollbar
         self.log_text_container = ttk.Frame(self.log_frame)
         self.log_text_container.pack(fill=tk.BOTH, expand=True)
@@ -352,6 +364,9 @@ class OCRView(TkinterDnD.Tk):
     def start_ocr(self):
         """Handle start OCR button click."""
         if not self.viewmodel.is_running():
+            # Set the parallel processing parameters
+            self.viewmodel.set_parallel_jobs(self.jobs_var.get())
+            
             success = self.viewmodel.start_ocr()
             if success:
                 self.start_button.config(state=DISABLED)
@@ -373,8 +388,27 @@ class OCRView(TkinterDnD.Tk):
     # Callbacks invoked by ViewModel
     def update_status(self, completed, current, next_items, current_index, total):
         """Update the status display based on ViewModel data."""
-        self.current_label.config(text="Currently Processing: " + (current if current else "None"))
+        # Update currently processing label - support for multiple PDFs
+        if current:
+            if isinstance(current, list):
+                # For multiple PDFs being processed
+                if current:
+                    # Display file names without full paths to save space
+                    display_pdfs = [os.path.basename(pdf) for pdf in current[:3]]
+                    more_count = len(current) - 3
+                    display_text = ", ".join(display_pdfs)
+                    if more_count > 0:
+                        display_text += f" and {more_count} more"
+                    self.current_label.config(text=f"Currently Processing: {display_text}")
+                else:
+                    self.current_label.config(text="Currently Processing: None")
+            else:
+                # Single PDF (backwards compatibility)
+                self.current_label.config(text=f"Currently Processing: {os.path.basename(current)}")
+        else:
+            self.current_label.config(text="Currently Processing: None")
         
+        # Rest of the method remains the same
         self.next_status_label.config(text=f"Number of PDFs to be processed: {len(next_items)}")
         for row in self.next_tree.get_children():
             self.next_tree.delete(row)
