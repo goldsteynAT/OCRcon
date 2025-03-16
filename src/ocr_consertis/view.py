@@ -388,33 +388,48 @@ class OCRView(TkinterDnD.Tk):
     # Callbacks invoked by ViewModel
     def update_status(self, completed, current, next_items, current_index, total):
         """Update the status display based on ViewModel data."""
-        # Update currently processing label - support for multiple PDFs
+        # Update the "Currently Processing" section
         if current:
             if isinstance(current, list):
-                # For multiple PDFs being processed
-                if current:
-                    # Display file names without full paths to save space
-                    display_pdfs = [os.path.basename(pdf) for pdf in current[:3]]
-                    more_count = len(current) - 3
-                    display_text = ", ".join(display_pdfs)
-                    if more_count > 0:
-                        display_text += f" and {more_count} more"
-                    self.current_label.config(text=f"Currently Processing: {display_text}")
+                # When multiple PDFs are being processed
+                if len(current) > 0:
+                    if len(current) == 1:
+                        # Single PDF
+                        self.current_label.config(text=f"Currently Processing: {os.path.basename(current[0])}")
+                    else:
+                        # Multiple PDFs - show count and some file names
+                        if len(current) <= 3:
+                            # Show all if 3 or fewer
+                            filenames = [os.path.basename(pdf) for pdf in current]
+                            self.current_label.config(text=f"Currently Processing: {', '.join(filenames)}")
+                        else:
+                            # Show first 2 and count for more than 3
+                            filenames = [os.path.basename(pdf) for pdf in current[:2]]
+                            self.current_label.config(
+                                text=f"Currently Processing: {', '.join(filenames)} and {len(current) - 2} more PDFs"
+                            )
+                    
+                    # Show count in title
+                    self.title(f"OCRcon - Processing {len(current)} PDFs in parallel")
                 else:
                     self.current_label.config(text="Currently Processing: None")
+                    self.title("OCRcon - Control. Connect. Consertis.")
             else:
-                # Single PDF (backwards compatibility)
+                # For backward compatibility - single string
                 self.current_label.config(text=f"Currently Processing: {os.path.basename(current)}")
+                self.title(f"OCRcon - Processing PDF")
         else:
             self.current_label.config(text="Currently Processing: None")
+            self.title("OCRcon - Control. Connect. Consertis.")
         
-        # Rest of the method remains the same
+        # Update the Next PDFs tab
         self.next_status_label.config(text=f"Number of PDFs to be processed: {len(next_items)}")
         for row in self.next_tree.get_children():
             self.next_tree.delete(row)
         for file in next_items:
             self.next_tree.insert("", tk.END, text=file)
         
+        # Update the Completed PDFs tab
         self.completed_status_label.config(text=f"Number of completed PDFs: {len(completed)}")
         for row in self.completed_tree.get_children():
             self.completed_tree.delete(row)
@@ -430,14 +445,15 @@ class OCRView(TkinterDnD.Tk):
         for file in self.viewmodel.model.global_processed:
             self.total_completed_tree.insert("", tk.END, text=file)
         
-        # Update folder statistics too, for consistency
+        # Update folder statistics
         self.update_folder_stats()
         
         # Update button states based on processing status
-        if not current and self.viewmodel.is_running() == False:
+        if not self.viewmodel.is_running():
             self.start_button.config(state=NORMAL)
             self.pause_button.config(state=DISABLED)
             self.resume_button.config(state=DISABLED)
+
     
     def update_progress(self, progress):
         """Update the progress bar based on ViewModel data."""
