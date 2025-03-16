@@ -3,6 +3,7 @@ import json
 import ocrmypdf
 import time
 from typing import List, Callable, Optional, Tuple
+from datetime import datetime, timedelta
 
 class OCRModel:
     """Model class handling the OCR processing and status management."""
@@ -28,6 +29,12 @@ class OCRModel:
         
         # Clear the current session file on startup
         self.save_status(self.current_status_file, [])
+        
+        # Time tracking variables
+        self.start_time = None
+        self.pause_time = None
+        self.total_pause_time = timedelta(0)
+        self.processing_times = []  # List to store processing time for each PDF
     
     def load_status(self, status_file: str) -> List[str]:
         """Load the list of processed PDFs from a JSON status file."""
@@ -84,6 +91,7 @@ class OCRModel:
     def apply_ocr_to_pdf(self, input_pdf: str, output_pdf: str, use_gpu: bool = False, 
                          language: str = "deu+eng", deskew: bool = True, jobs: int = 1) -> bool:
         """Apply OCR to a PDF file and return success status."""
+        pdf_start_time = time.time()
         try:
             if use_gpu:
                 ocrmypdf.ocr(
@@ -104,6 +112,11 @@ class OCRModel:
                     jobs=jobs
                 )
             print(f"✅ OCR applied: {input_pdf} -> {output_pdf}")
+            
+            # Record processing time for this PDF
+            processing_time = time.time() - pdf_start_time
+            self.processing_times.append(processing_time)
+            
             return True
         except Exception as e:
             print(f"❌ Error processing {input_pdf}: {e}")
@@ -135,6 +148,45 @@ class OCRModel:
         to_be_processed = total - processed_count
         return total, to_be_processed
     
+    def get_time_stats(self) -> Tuple[float, float, float]:
+        """
+        Get time statistics for OCR processing.
+        
+        Returns:
+            Tuple containing:
+            - elapsed_time: Time elapsed since start in seconds
+            - avg_time_per_pdf: Average time per PDF in seconds
+            - estimated_time_remaining: Estimated time remaining in seconds
+        """
+        if not self.start_time:
+            return 0, 0, 0
+        
+        # Calculate elapsed time (accounting for pauses)
+        if self.paused and self.pause_time:
+            current_time = self.pause_time
+        else:
+            current_time = datetime.now()
+        
+        elapsed_time = (current_time - self.start_time - self.total_pause_time).total_seconds()
+        
+        # Calculate average processing time per PDF
+        if self.processing_times:
+            avg_time_per_pdf = sum(self.processing_times) / len(self.processing_times)
+        elif self.processed_pdfs:
+            # Fallback if we don't have detailed processing times
+            avg_time_per_pdf = elapsed_time / len(self.processed_pdfs)
+        else:
+            avg_time_per_pdf = 0
+        
+        # Calculate estimated time remaining
+        if avg_time_per_pdf > 0 and len(self.all_pdfs) > len(self.processed_pdfs):
+            remaining_pdfs = len(self.all_pdfs) - len(self.processed_pdfs)
+            estimated_time_remaining = remaining_pdfs * avg_time_per_pdf
+        else:
+            estimated_time_remaining = 0
+        
+        return elapsed_time, avg_time_per_pdf, estimated_time_remaining
+    
     def start_ocr_process(self, input_folders: List[str], output_dir: str, 
                         use_gpu: bool = False, language: str = "deu+eng", 
                         deskew: bool = True, jobs: int = 1,
@@ -146,6 +198,12 @@ class OCRModel:
         
         self.running = True
         self.paused = False
+        
+        # Reset time tracking
+        self.start_time = datetime.now()
+        self.pause_time = None
+        self.total_pause_time = timedelta(0)
+        self.processing_times = []
         
         # Collect all PDFs
         self.all_pdfs = self.collect_pdfs(input_folders)
@@ -239,13 +297,20 @@ class OCRModel:
     
     def pause_processing(self) -> None:
         """Pause the OCR processing."""
-        self.paused = True
-        print("OCR processing paused.\n")
+        if not self.paused:
+            self.paused = True
+            self.pause_time = datetime.now()
+            print("OCR processing paused.\n")
     
     def resume_processing(self) -> None:
         """Resume the OCR processing."""
-        self.paused = False
-        print("OCR processing resumed.\n")
+        if self.paused:
+            self.paused = False
+            if self.pause_time:
+                pause_duration = datetime.now() - self.pause_time
+                self.total_pause_time += pause_duration
+                self.pause_time = None
+            print("OCR processing resumed.\n")
     
     def stop_processing(self) -> None:
         """Stop the OCR processing completely."""

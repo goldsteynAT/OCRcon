@@ -46,6 +46,7 @@ class OCRView(TkinterDnD.Tk):
         # Register callbacks with ViewModel
         self.viewmodel.add_status_subscriber(self.update_status)
         self.viewmodel.add_progress_subscriber(self.update_progress)
+        self.viewmodel.add_time_subscriber(self.update_time_stats)
         
         # Register window close event
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -155,7 +156,20 @@ class OCRView(TkinterDnD.Tk):
         
         # Progress bar
         self.progress = ttk.Progressbar(self, length=600, mode='determinate')
-        self.progress.pack(pady=10)
+        self.progress.pack(pady=(10, 5))
+        
+        # Detailed status label under progress bar
+        self.detailed_status_frame = ttk.Frame(self)
+        self.detailed_status_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        self.detailed_status_label = ttk.Label(
+            self.detailed_status_frame, 
+            text="0/0 PDFs processed [0.0%] - 0s passed - estimated time until completion: 0s",
+            font=("Segoe UI", 10),
+            anchor="center",
+            justify="center"
+        )
+        self.detailed_status_label.pack(fill=tk.X)
     
     def _create_notebook_section(self):
         """Create the notebook with tabs for next, completed and total completed PDFs."""
@@ -324,7 +338,7 @@ class OCRView(TkinterDnD.Tk):
         for file in completed:
             self.completed_tree.insert("", tk.END, text=file)
         
-        # Hier: Total Completed aktualisieren (global verarbeitete PDFs)
+        # Update Total Completed tab (global processed PDFs)
         self.total_completed_status_label.config(
             text=f"Total number of completed PDFs (all sessions): {len(self.viewmodel.model.global_processed)}"
         )
@@ -341,15 +355,35 @@ class OCRView(TkinterDnD.Tk):
             self.start_button.config(state=NORMAL)
             self.pause_button.config(state=DISABLED)
             self.resume_button.config(state=DISABLED)
-
     
     def update_progress(self, progress):
         """Update the progress bar based on ViewModel data."""
         self.progress['value'] = progress
     
+    def update_time_stats(self, elapsed_time, estimated_time, current_index, to_be_processed):
+        """Update the time statistics display."""
+        # Format the times into human-readable strings
+        elapsed_str = self.viewmodel.format_time(elapsed_time)
+        estimated_str = self.viewmodel.format_time(estimated_time)
+        
+        # Calculate percentage
+        percentage = 0.0
+        if to_be_processed > 0:
+            percentage = (current_index / to_be_processed) * 100
+        
+        # Update the detailed status label
+        self.detailed_status_label.config(
+            text=f"{current_index}/{to_be_processed} PDFs processed [{percentage:.1f}%] - {elapsed_str} passed - estimated time until completion: {estimated_str}"
+        )
+    
     def update_folder_stats(self):
         """Update the folder statistics display."""
         total, to_be_processed = self.viewmodel.update_folder_stats()
+        
+        # If OCR is running, we should keep the original to_be_processed value
+        if self.viewmodel.is_running():
+            to_be_processed = self.viewmodel.to_be_processed_count
+            
         self.input_status_label.config(text=f"Total PDFs: {total}, To be processed: {to_be_processed}")
     
     # Helper methods
