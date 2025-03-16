@@ -7,22 +7,25 @@ OCR_Consertis/
 │   ├───logs/
 │   │   #export_project.py
 │   │   all.txt
-│   │   ocr_status.json
-│   │   ocr_status_current.json
 │   │   vzs.txt
 │   ├───src/
 │   │   ├───ocr_consertis/
 │   │   │   __init__.py
-│   │   │   gui.py
 │   │   │   main.py
-│   │   │   ocr_processing.py
-│   │   │   progress_display.py
-│   │   │   status_manager.py
+│   │   │   model.py
+│   │   │   view.py
+│   │   │   viewmodel.py
+│   │   │   ├───logs/
+│   │   │   │   ocr_status.json
+│   │   │   │   ocr_status_current.json
 │   │   │   ├───__pycache__/
 │   │   │   │   folder_selector.cpython-312.pyc
 │   │   │   │   gui.cpython-312.pyc
+│   │   │   │   model.cpython-312.pyc
 │   │   │   │   ocr_processing.cpython-312.pyc
 │   │   │   │   progress_display.cpython-312.pyc
 │   │   │   │   status_manager.cpython-312.pyc
+│   │   │   │   view.cpython-312.pyc
+│   │   │   │   viewmodel.cpython-312.pyc
 │   ├───tests/
 │   │   __init__.py
