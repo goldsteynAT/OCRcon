@@ -41,7 +41,6 @@ class OCRView(TkinterDnD.Tk):
         self._create_folder_section()
         self._create_control_section()
         self._create_notebook_section()
-        self._create_log_section()
         
         # Register callbacks with ViewModel
         self.viewmodel.add_status_subscriber(self.update_status)
@@ -195,16 +194,16 @@ class OCRView(TkinterDnD.Tk):
         self.detailed_status_label.pack(fill=tk.X)
     
     def _create_notebook_section(self):
-        """Create the notebook with tabs for next, completed and total completed PDFs."""
+        """Create the notebook with tabs for next, completed, total completed PDFs and logs."""
         # Label for currently processed PDF
         self.current_label = ttk.Label(self, text="Currently Processing: None", font=("Segoe UI", 10), anchor="center", justify="center")
         self.current_label.pack(fill=tk.X, padx=10, pady=(10, 0))
         
-        # Create a frame to contain both notebook and log sections
+        # Create a frame to contain the notebook section
         self.content_frame = ttk.Frame(self, borderwidth=1, relief="solid")
         self.content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Notebook for status displays (Next / Completed / Total Completed)
+        # Notebook for status displays (Next / Completed / Total Completed / Log)
         self.notebook = ttk.Notebook(self.content_frame)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
@@ -225,7 +224,7 @@ class OCRView(TkinterDnD.Tk):
         
         # Add tree with attached scrollbar
         self.next_tree = ttk.Treeview(self.next_tree_container, columns=("File",), show="tree", 
-                                     yscrollcommand=self.next_scrollbar.set)
+                                    yscrollcommand=self.next_scrollbar.set)
         self.next_tree.column("#0", width=800, minwidth=400, stretch=True)
         self.next_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
@@ -249,7 +248,7 @@ class OCRView(TkinterDnD.Tk):
         
         # Add tree with attached scrollbar
         self.completed_tree = ttk.Treeview(self.completed_tree_container, columns=("File",), show="tree",
-                                         yscrollcommand=self.completed_scrollbar.set)
+                                        yscrollcommand=self.completed_scrollbar.set)
         self.completed_tree.column("#0", width=800, minwidth=400, stretch=True)
         self.completed_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
@@ -261,8 +260,8 @@ class OCRView(TkinterDnD.Tk):
         self.notebook.add(self.total_completed_frame, text="Total Completed")
         
         self.total_completed_status_label = ttk.Label(self.total_completed_frame, 
-                                                     text="Total number of completed PDFs (all sessions): 0", 
-                                                     font=("Segoe UI", 10))
+                                                    text="Total number of completed PDFs (all sessions): 0", 
+                                                    font=("Segoe UI", 10))
         self.total_completed_status_label.pack(fill=tk.X, padx=5, pady=(5, 0))
         
         # Create a frame to contain the tree and scrollbar for proper layout
@@ -275,12 +274,36 @@ class OCRView(TkinterDnD.Tk):
         
         # Add tree with attached scrollbar
         self.total_completed_tree = ttk.Treeview(self.total_completed_tree_container, columns=("File",), show="tree",
-                                               yscrollcommand=self.total_completed_scrollbar.set)
+                                            yscrollcommand=self.total_completed_scrollbar.set)
         self.total_completed_tree.column("#0", width=800, minwidth=400, stretch=True)
         self.total_completed_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         # Connect scrollbar to tree
         self.total_completed_scrollbar.config(command=self.total_completed_tree.yview)
+        
+        # Tab for Log Output
+        self.log_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.log_frame, text="Log")
+        
+        # Create a frame to contain the text widget and scrollbar
+        self.log_text_container = ttk.Frame(self.log_frame)
+        self.log_text_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Add scrollbar first (right side)
+        self.log_scrollbar = ttk.Scrollbar(self.log_text_container, orient=tk.VERTICAL)
+        self.log_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Add text widget with attached scrollbar
+        self.log_text = tk.Text(self.log_text_container, wrap=tk.WORD, height=10, 
+                            yscrollcommand=self.log_scrollbar.set)
+        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Connect scrollbar to text widget
+        self.log_scrollbar.config(command=self.log_text.yview)
+        
+        # Redirect stdout and stderr to log text widget
+        sys.stdout = RedirectText(self.log_text)
+        sys.stderr = RedirectText(self.log_text)
     
     def _create_log_section(self):
         """Create the log output section."""
