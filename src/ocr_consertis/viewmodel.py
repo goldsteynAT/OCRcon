@@ -2,6 +2,7 @@ import threading
 from typing import List, Callable, Optional, Tuple
 from model import OCRModel
 import time
+import os
 
 class OCRViewModel:
     """Singleton ViewModel that mediates between View and Model for the OCR application."""
@@ -25,6 +26,7 @@ class OCRViewModel:
         self.language = "deu+eng"
         self.deskew = True
         self.jobs = 4
+        self.max_workers = 2  # Default parallel workers
         
         # Thread for OCR processing
         self.ocr_thread = None
@@ -67,7 +69,7 @@ class OCRViewModel:
         if callback in self.time_subscribers:
             self.time_subscribers.remove(callback)
     
-    def notify_status_update(self, completed: List[str], current: Optional[str], 
+    def notify_status_update(self, completed: List[str], current: List[str], 
                             next_items: List[str], current_index: int, total: int) -> None:
         """Notify all subscribers about a status update."""
         for callback in self.status_subscribers:
@@ -141,6 +143,7 @@ class OCRViewModel:
         self.to_be_processed_count = to_be_processed
         
         print(f"Starting OCR process: {to_be_processed} files to process out of {total} total files")
+        print(f"Using {self.max_workers} parallel workers")
         
         # Start OCR in a separate thread
         self.ocr_thread = threading.Thread(
@@ -197,6 +200,7 @@ class OCRViewModel:
             language=self.language,
             deskew=self.deskew,
             jobs=self.jobs,
+            max_workers=self.max_workers,  # Pass the parallelism parameter
             status_callback=status_callback
         )
         

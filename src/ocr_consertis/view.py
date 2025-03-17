@@ -141,6 +141,26 @@ class OCRView(TkinterDnD.Tk):
     
     def _create_control_section(self):
         """Create the control buttons and progress bar section."""
+        # Add parallel workers configuration
+        self.parallel_frame = ttk.Frame(self)
+        self.parallel_frame.pack(pady=5)
+        
+        # Get CPU count for max value (default to 8 if can't determine)
+        max_workers = os.cpu_count() or 8
+        
+        self.parallel_label = ttk.Label(self.parallel_frame, text="Parallel Workers:", font=("Segoe UI", 10))
+        self.parallel_label.pack(side=tk.LEFT, padx=5)
+        
+        self.parallel_var = tk.IntVar(value=2)  # Default to 2 workers
+        self.parallel_spinbox = ttk.Spinbox(
+            self.parallel_frame, 
+            from_=1, 
+            to=max_workers,
+            textvariable=self.parallel_var,
+            width=5
+        )
+        self.parallel_spinbox.pack(side=tk.LEFT, padx=5)
+        
         # Control elements (Start, Pause, Resume)
         self.control_frame = ttk.Frame(self, style="TFrame")
         self.control_frame.pack(pady=10)
@@ -352,6 +372,9 @@ class OCRView(TkinterDnD.Tk):
     def start_ocr(self):
         """Handle start OCR button click."""
         if not self.viewmodel.is_running():
+            # Update max_workers from UI
+            self.viewmodel.max_workers = self.parallel_var.get()
+            
             success = self.viewmodel.start_ocr()
             if success:
                 self.start_button.config(state=DISABLED)
@@ -373,7 +396,21 @@ class OCRView(TkinterDnD.Tk):
     # Callbacks invoked by ViewModel
     def update_status(self, completed, current, next_items, current_index, total):
         """Update the status display based on ViewModel data."""
-        self.current_label.config(text="Currently Processing: " + (current if current else "None"))
+        # Handle multiple in-progress PDFs
+        if isinstance(current, list):
+            if current:
+                if len(current) == 1:
+                    self.current_label.config(text=f"Currently Processing: {current[0]}")
+                else:
+                    current_files = "\n".join([os.path.basename(f) for f in current[:2]])
+                    if len(current) > 2:
+                        current_files += f"\n... and {len(current)-2} more"
+                    self.current_label.config(text=f"Currently Processing {len(current)} PDFs in parallel:\n{current_files}")
+            else:
+                self.current_label.config(text="Currently Processing: None")
+        else:
+            # Backward compatibility
+            self.current_label.config(text="Currently Processing: " + (current if current else "None"))
         
         self.next_status_label.config(text=f"Number of PDFs to be processed: {len(next_items)}")
         for row in self.next_tree.get_children():
@@ -388,22 +425,30 @@ class OCRView(TkinterDnD.Tk):
             self.completed_tree.insert("", tk.END, text=file)
         
         # Update Total Completed tab (global processed PDFs)
+        global_processed_len = len(self.viewmodel.model.global_processed)
         self.total_completed_status_label.config(
-            text=f"Total number of completed PDFs (all sessions): {len(self.viewmodel.model.global_processed)}"
+            text=f"Total number of completed PDFs (all sessions): {global_processed_len}"
         )
         for row in self.total_completed_tree.get_children():
             self.total_completed_tree.delete(row)
         for file in self.viewmodel.model.global_processed:
             self.total_completed_tree.insert("", tk.END, text=file)
         
+        # Calculate progress based on completed + in_progress
+        if total > 0:
+            in_progress_count = len(current) if isinstance(current, list) else (1 if current else 0)
+            progress = ((current_index + in_progress_count) / total * 100)
+            self.progress['value'] = min(progress, 100)  # Ensure we don't exceed 100%
+        
         # Update folder statistics too, for consistency
         self.update_folder_stats()
         
         # Update button states based on processing status
-        if not current and self.viewmodel.is_running() == False:
+        if not self.viewmodel.is_running():
             self.start_button.config(state=NORMAL)
             self.pause_button.config(state=DISABLED)
             self.resume_button.config(state=DISABLED)
+
     
     def update_progress(self, progress):
         """Update the progress bar based on ViewModel data."""
