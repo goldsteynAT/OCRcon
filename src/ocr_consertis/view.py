@@ -55,7 +55,10 @@ class OCRView(TkinterDnD.Tk):
         """Create the logo section at the top of the window."""
         # Find logo path
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        logo_path = os.path.join(script_dir, "image.png")
+        project_root = os.path.dirname(os.path.dirname(script_dir))  # Zwei Ebenen nach oben
+        logo_path = os.path.join(project_root, "image.png")
+
+
         
         # Logo frame for central positioning
         self.logo_frame = ttk.Frame(self)
