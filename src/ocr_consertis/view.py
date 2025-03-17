@@ -207,6 +207,9 @@ class OCRView(TkinterDnD.Tk):
         self.notebook = ttk.Notebook(self.content_frame)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
+        # Add callback for tab change to ensure data is updated when switching tabs
+        self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_change)
+        
         # Tab for Next PDFs
         self.next_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.next_frame, text="Next")
@@ -304,6 +307,53 @@ class OCRView(TkinterDnD.Tk):
         # Redirect stdout and stderr to log text widget
         sys.stdout = RedirectText(self.log_text)
         sys.stderr = RedirectText(self.log_text)
+
+    def on_tab_change(self, event):
+        """Handle tab change events to ensure data is updated."""
+        # Get the currently selected tab
+        current_tab = self.notebook.index(self.notebook.select())
+        
+        # Force update the current tab with the current data
+        if current_tab == 0:  # Next tab
+            # Update the "Next" tab content
+            self.next_status_label.config(text=f"Number of PDFs to be processed: {len(self.viewmodel.model.in_progress_pdfs)}")
+            
+            # Clear and rebuild the tree
+            for item in self.next_tree.get_children():
+                self.next_tree.delete(item)
+                
+            # Get fresh data from viewmodel
+            unprocessed = self.viewmodel.model.get_unprocessed_pdfs(self.viewmodel.input_folders)
+            for pdf in unprocessed:
+                if pdf not in self.viewmodel.model.processed_pdfs:
+                    self.next_tree.insert("", tk.END, iid=pdf, text=pdf)
+        
+        elif current_tab == 1:  # Completed tab
+            # Update the "Completed" tab content
+            self.completed_status_label.config(text=f"Number of completed PDFs: {len(self.viewmodel.model.processed_pdfs)}")
+            
+            # Clear and rebuild the tree
+            for item in self.completed_tree.get_children():
+                self.completed_tree.delete(item)
+                
+            # Insert current session processed PDFs
+            for pdf in self.viewmodel.model.processed_pdfs:
+                self.completed_tree.insert("", tk.END, iid=pdf, text=pdf)
+        
+        elif current_tab == 2:  # Total Completed tab
+            # Update the "Total Completed" tab content
+            global_processed_len = len(self.viewmodel.model.global_processed)
+            self.total_completed_status_label.config(
+                text=f"Total number of completed PDFs (all sessions): {global_processed_len}"
+            )
+            
+            # Clear and rebuild the tree
+            for item in self.total_completed_tree.get_children():
+                self.total_completed_tree.delete(item)
+                
+            # Insert all processed PDFs (global)
+            for pdf in self.viewmodel.model.global_processed:
+                self.total_completed_tree.insert("", tk.END, iid=pdf, text=pdf)
     
     def _create_log_section(self):
         """Create the log output section."""
@@ -421,7 +471,7 @@ class OCRView(TkinterDnD.Tk):
     
     # Callbacks invoked by ViewModel
     def update_status(self, completed, current, next_items, current_index, total):
-        """Update the status display based on ViewModel data."""
+        """Update the status display based on ViewModel data with optimized tab updates."""
         # Handle multiple in-progress PDFs
         if isinstance(current, list):
             if current:
@@ -438,32 +488,109 @@ class OCRView(TkinterDnD.Tk):
             # Backward compatibility
             self.current_label.config(text="Currently Processing: " + (current if current else "None"))
         
-        self.next_status_label.config(text=f"Number of PDFs to be processed: {len(next_items)}")
-        for row in self.next_tree.get_children():
-            self.next_tree.delete(row)
-        for file in next_items:
-            self.next_tree.insert("", tk.END, text=file)
+        # Get the currently selected tab index
+        current_tab = self.notebook.index(self.notebook.select())
         
-        self.completed_status_label.config(text=f"Number of completed PDFs: {len(completed)}")
-        for row in self.completed_tree.get_children():
-            self.completed_tree.delete(row)
-        for file in completed:
-            self.completed_tree.insert("", tk.END, text=file)
+        # Only update the "Next" tab if it's currently visible
+        if current_tab == 0:  # Next tab is at index 0
+            # Save scroll position
+            try:
+                scroll_pos = self.next_tree.yview()
+            except:
+                scroll_pos = (0, 1)
+                
+            self.next_status_label.config(text=f"Number of PDFs to be processed: {len(next_items)}")
+            
+            # Efficiently update the tree without complete rebuild
+            existing_items = set(self.next_tree.get_children())
+            new_items = set(next_items)
+            
+            # Remove items that are no longer in the list
+            for item in existing_items:
+                if item not in new_items:
+                    self.next_tree.delete(item)
+            
+            # Add only new items
+            for file in next_items:
+                if file not in existing_items:
+                    self.next_tree.insert("", tk.END, iid=file, text=file)
+                    
+            # Restore scroll position
+            self.next_tree.update_idletasks()
+            try:
+                self.next_tree.yview_moveto(scroll_pos[0])
+            except:
+                pass
         
-        # Update Total Completed tab (global processed PDFs)
-        global_processed_len = len(self.viewmodel.model.global_processed)
-        self.total_completed_status_label.config(
-            text=f"Total number of completed PDFs (all sessions): {global_processed_len}"
-        )
-        for row in self.total_completed_tree.get_children():
-            self.total_completed_tree.delete(row)
-        for file in self.viewmodel.model.global_processed:
-            self.total_completed_tree.insert("", tk.END, text=file)
+        # Only update the "Completed" tab if it's currently visible
+        if current_tab == 1:  # Completed tab is at index 1
+            # Save scroll position
+            try:
+                scroll_pos = self.completed_tree.yview()
+            except:
+                scroll_pos = (0, 1)
+                
+            self.completed_status_label.config(text=f"Number of completed PDFs: {len(completed)}")
+            
+            # Efficiently update the tree without complete rebuild
+            existing_items = set(self.completed_tree.get_children())
+            new_items = set(completed)
+            
+            # Remove items that are no longer in the list
+            for item in existing_items:
+                if item not in new_items:
+                    self.completed_tree.delete(item)
+            
+            # Add only new items
+            for file in completed:
+                if file not in existing_items:
+                    self.completed_tree.insert("", tk.END, iid=file, text=file)
+                    
+            # Restore scroll position
+            self.completed_tree.update_idletasks()
+            try:
+                self.completed_tree.yview_moveto(scroll_pos[0])
+            except:
+                pass
+        
+        # Only update the "Total Completed" tab if it's currently visible
+        if current_tab == 2:  # Total Completed tab is at index 2
+            # Save scroll position
+            try:
+                scroll_pos = self.total_completed_tree.yview()
+            except:
+                scroll_pos = (0, 1)
+                
+            global_processed_len = len(self.viewmodel.model.global_processed)
+            self.total_completed_status_label.config(
+                text=f"Total number of completed PDFs (all sessions): {global_processed_len}"
+            )
+            
+            # Efficiently update the tree without complete rebuild
+            existing_items = set(self.total_completed_tree.get_children())
+            new_items = set(self.viewmodel.model.global_processed)
+            
+            # Remove items that are no longer in the list
+            for item in existing_items:
+                if item not in new_items:
+                    self.total_completed_tree.delete(item)
+            
+            # Add only new items
+            for file in self.viewmodel.model.global_processed:
+                if file not in existing_items:
+                    self.total_completed_tree.insert("", tk.END, iid=file, text=file)
+                    
+            # Restore scroll position
+            self.total_completed_tree.update_idletasks()
+            try:
+                self.total_completed_tree.yview_moveto(scroll_pos[0])
+            except:
+                pass
         
         # Calculate progress based on completed + in_progress
         if total > 0:
             in_progress_count = len(current) if isinstance(current, list) else (1 if current else 0)
-            progress = ((current_index + in_progress_count) / total * 100)
+            progress = ((current_index) / total * 100)
             self.progress['value'] = min(progress, 100)  # Ensure we don't exceed 100%
         
         # Update folder statistics too, for consistency
