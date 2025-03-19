@@ -132,6 +132,20 @@ class OCRView(TkinterDnD.Tk):
         self.output_frame = ttk.Frame(self.folder_frame)
         self.output_frame.pack(fill=tk.X, padx=5, pady=5)
         
+        # Horizontale Einteilung für Output-Ordner und Checkbox
+        self.output_options_frame = ttk.Frame(self.output_frame)
+        self.output_options_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Checkbox für "Quelldateien überschreiben"
+        self.overwrite_var = tk.BooleanVar(value=False)
+        self.overwrite_checkbox = ttk.Checkbutton(
+            self.output_options_frame,
+            text="Overwrite source files",
+            variable=self.overwrite_var,
+            command=self.toggle_overwrite
+        )
+        self.overwrite_checkbox.pack(side=tk.LEFT, padx=5, anchor="w")
+        
         self.output_label_desc = ttk.Label(self.output_frame, text="📁 Output Folder:", font=("Segoe UI Emoji", 12), anchor="w")
         self.output_label_desc.pack(fill=tk.X, padx=5, pady=(5, 0))
         
@@ -140,6 +154,19 @@ class OCRView(TkinterDnD.Tk):
         
         self.select_output_button = ttk.Button(self.output_frame, text="🔎 Browse", command=self.select_output)
         self.select_output_button.pack(anchor="e", padx=5, pady=5)
+    
+    def toggle_overwrite(self):
+        """Toggle the overwrite source files option."""
+        overwrite = self.overwrite_var.get()
+        self.viewmodel.set_overwrite_source(overwrite)
+        
+        # Deaktiviere/Aktiviere Output-Ordner je nach Zustand
+        if overwrite:
+            self.output_entry.config(state="disabled")
+            self.select_output_button.config(state="disabled")
+        else:
+            self.output_entry.config(state="readonly")
+            self.select_output_button.config(state="normal")
     
     def _create_control_section(self):
         """Create the control buttons and progress bar section."""
@@ -451,12 +478,15 @@ class OCRView(TkinterDnD.Tk):
             # Update max_workers from UI
             self.viewmodel.max_workers = self.parallel_var.get()
             
+            # Update overwrite_source from UI (Sicherheitshalber)
+            self.viewmodel.set_overwrite_source(self.overwrite_var.get())
+            
             success = self.viewmodel.start_ocr()
             if success:
                 self.start_button.config(state=DISABLED)
                 self.pause_button.config(state=NORMAL)
                 self.resume_button.config(state=DISABLED)
-    
+        
     def pause_ocr(self):
         """Handle pause OCR button click."""
         self.viewmodel.pause_ocr()

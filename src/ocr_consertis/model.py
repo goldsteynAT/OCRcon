@@ -20,6 +20,9 @@ class OCRModel:
         self.global_status_file = os.path.join(self.logs_dir, "ocr_status.json")
         self.current_status_file = os.path.join(self.logs_dir, "ocr_status_current.json")
         
+        # Neues Flag für Quellüberschreibung
+        self.overwrite_source = False
+        
         # Initialize empty lists for tracking PDFs
         self.all_pdfs = []
         self.running = False
@@ -204,13 +207,18 @@ class OCRModel:
         return elapsed_time, avg_time_per_pdf, estimated_time_remaining
     
     def start_ocr_process(self, input_folders: List[str], output_dir: str, 
-                        use_gpu: bool = False, language: str = "deu+eng", 
-                        deskew: bool = True, jobs: int = 1,
-                        max_workers: int = 2,  # New parameter for parallel processing
-                        status_callback: Optional[Callable] = None) -> None:
+                    use_gpu: bool = False, language: str = "deu+eng", 
+                    deskew: bool = True, jobs: int = 1,
+                    max_workers: int = 2,  # New parameter for parallel processing
+                    status_callback: Optional[Callable] = None) -> None:
         """Start the OCR process for all PDFs in the input folders with parallel processing."""
-        if not input_folders or not output_dir:
-            print("Please select at least one input folder and an output folder.")
+        # Geänderte Prüfung, die overwrite_source berücksichtigt
+        if not input_folders:
+            print("Please select at least one input folder.")
+            return
+            
+        if not self.overwrite_source and not output_dir:
+            print("Please select an output folder or enable 'Overwrite source files'.")
             return
         
         self.running = True
@@ -239,7 +247,7 @@ class OCRModel:
             with self.processing_lock:
                 in_progress_copy = self.in_progress_pdfs.copy()
             status_callback(self.processed_pdfs.copy(), in_progress_copy, 
-                           unprocessed_pdfs, len(self.processed_pdfs), total)
+                        unprocessed_pdfs, len(self.processed_pdfs), total)
         
         # If no PDFs to process
         if not unprocessed_pdfs:
@@ -253,13 +261,20 @@ class OCRModel:
         processing_thread = threading.Thread(
             target=self._process_pdfs_parallel,
             args=(unprocessed_pdfs, input_folders, output_dir, use_gpu, language, 
-                 deskew, jobs, max_workers, status_callback, total)
+                deskew, jobs, max_workers, status_callback, total)
         )
         processing_thread.daemon = True
         processing_thread.start()
     
     def _determine_output_path(self, input_pdf: str, input_folders: List[str], output_dir: str) -> str:
         """Determine the output path for a PDF."""
+        # Wenn Quelldateien überschrieben werden sollen, temporären Pfad erzeugen
+        if self.overwrite_source:
+            import tempfile
+            temp_dir = tempfile.gettempdir()
+            return os.path.join(temp_dir, f"temp_{os.path.basename(input_pdf)}")
+        
+        # Bestehende Logik für normalen Output-Pfad...
         output_pdf = None
         for input_dir in input_folders:
             if self.is_pdf_in_input_folders(input_pdf, [input_dir]):
@@ -290,9 +305,9 @@ class OCRModel:
         return output_pdf
     
     def _process_pdfs_parallel(self, unprocessed_pdfs: List[str], input_folders: List[str], 
-                             output_dir: str, use_gpu: bool, language: str, deskew: bool, 
-                             jobs: int, max_workers: int, status_callback: Optional[Callable], 
-                             total: int) -> None:
+                         output_dir: str, use_gpu: bool, language: str, deskew: bool, 
+                         jobs: int, max_workers: int, status_callback: Optional[Callable], 
+                         total: int) -> None:
         """Process PDFs in parallel using ProcessPoolExecutor."""
         print(f"Starting parallel processing with {max_workers} workers")
         
@@ -312,8 +327,8 @@ class OCRModel:
             output_pdf = self._determine_output_path(input_pdf, input_folders, output_dir)
             pdf_to_output[input_pdf] = output_pdf
             
-            # Erstelle Parameter für den Job
-            job_params.append((input_pdf, output_pdf, use_gpu, language, deskew, jobs))
+            # Erstelle Parameter für den Job - füge overwrite_source Flag hinzu
+            job_params.append((input_pdf, output_pdf, use_gpu, language, deskew, jobs, self.overwrite_source))
         
         # Erstelle Futures-Dictionary zur Verfolgung der Aufträge
         futures_dict = {}

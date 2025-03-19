@@ -27,6 +27,7 @@ class OCRViewModel:
         self.deskew = True
         self.jobs = 4
         self.max_workers = 2  # Default parallel workers
+        self.overwrite_source = False  # Neues Flag für Quellüberschreibung
         
         # Thread for OCR processing
         self.ocr_thread = None
@@ -44,6 +45,15 @@ class OCRViewModel:
         self.to_be_processed_count = 0
         
         OCRViewModel._initialized = True
+
+    def set_overwrite_source(self, overwrite: bool) -> None:
+        """Set whether to overwrite source files."""
+        self.overwrite_source = overwrite
+        self.model.overwrite_source = overwrite
+        if overwrite:
+            print("Source file overwrite mode enabled. Original PDFs will be replaced.")
+        else:
+            print("Source file overwrite mode disabled. PDFs will be saved to output folder.")
     
     def add_status_subscriber(self, callback: Callable) -> None:
         """Register a callback function to receive status updates."""
@@ -130,8 +140,13 @@ class OCRViewModel:
     
     def start_ocr(self) -> bool:
         """Start the OCR process."""
-        if not self.input_folders or not self.output_folder:
-            print("Please select at least one input folder and an output folder.")
+        if not self.input_folders:
+            print("Please select at least one input folder.")
+            return False
+            
+        # Bei aktivierter Quellüberschreibung ist kein Output-Ordner erforderlich
+        if not self.overwrite_source and not self.output_folder:
+            print("Please select an output folder or enable 'Overwrite source files'.")
             return False
         
         if self.ocr_thread and self.ocr_thread.is_alive():
