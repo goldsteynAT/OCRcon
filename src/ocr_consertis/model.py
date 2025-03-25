@@ -213,7 +213,8 @@ class OCRModel:
                 use_gpu: bool = False, language: str = "deu+eng", 
                 deskew: bool = True, jobs: int = 1,
                 max_workers: int = 2,
-                continue_on_error: bool = True,  # New parameter
+                continue_on_error: bool = True,
+                ocr_mode: str = "auto",  # OCR-Modus hinzufügen
                 status_callback: Optional[Callable] = None) -> None:
         """Start the OCR process for all PDFs in the input folders with parallel processing."""
         # Geänderte Prüfung, die overwrite_source berücksichtigt
@@ -265,7 +266,7 @@ class OCRModel:
         processing_thread = threading.Thread(
             target=self._process_pdfs_parallel,
             args=(unprocessed_pdfs, input_folders, output_dir, use_gpu, language, 
-                deskew, jobs, max_workers, continue_on_error, status_callback, total)  # Add continue_on_error here
+                deskew, jobs, max_workers, continue_on_error, ocr_mode, status_callback, total)  # ocr_mode hinzufügen
         )
         processing_thread.daemon = True
         processing_thread.start()
@@ -310,7 +311,8 @@ class OCRModel:
     
     def _process_pdfs_parallel(self, unprocessed_pdfs: List[str], input_folders: List[str], 
                      output_dir: str, use_gpu: bool, language: str, deskew: bool, 
-                     jobs: int, max_workers: int, continue_on_error: bool,  # Add parameter here
+                     jobs: int, max_workers: int, continue_on_error: bool, 
+                     ocr_mode: str,  # OCR-Modus hinzufügen
                      status_callback: Optional[Callable], 
                      total: int) -> None:
         """Process PDFs in parallel using ProcessPoolExecutor."""
@@ -333,7 +335,8 @@ class OCRModel:
             pdf_to_output[input_pdf] = output_pdf
             
             # Erstelle Parameter für den Job - füge overwrite_source Flag hinzu
-            job_params.append((input_pdf, output_pdf, use_gpu, language, deskew, jobs, self.overwrite_source, continue_on_error))
+            job_params.append((input_pdf, output_pdf, use_gpu, language, deskew, jobs, 
+                          self.overwrite_source, continue_on_error, ocr_mode))
 
         
         # Erstelle Futures-Dictionary zur Verfolgung der Aufträge

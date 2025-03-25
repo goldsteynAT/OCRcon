@@ -170,19 +170,62 @@ class OCRView(TkinterDnD.Tk):
     
     def _create_control_section(self):
         """Create the control buttons and progress bar section."""
+        # OCR-Modus-Optionen als LabelFrame
+        self.ocr_options_frame = ttk.LabelFrame(self, text="OCR Mode")
+        self.ocr_options_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        # OCR-Modus-Variable
+        self.ocr_mode_var = tk.StringVar(value="auto")  # Default: auto
+        
+        # Auto-Modus (skip_text=True)
+        self.auto_mode_radio = ttk.Radiobutton(
+            self.ocr_options_frame,
+            text="Auto (Skip existing text)",
+            variable=self.ocr_mode_var,
+            value="auto"
+        )
+        self.auto_mode_radio.pack(anchor="w", padx=10, pady=2)
+        
+        # Force-Modus (force_ocr=True)
+        self.force_mode_radio = ttk.Radiobutton(
+            self.ocr_options_frame,
+            text="Force OCR (Apply OCR to all pages, even with existing text)",
+            variable=self.ocr_mode_var,
+            value="force"
+        )
+        self.force_mode_radio.pack(anchor="w", padx=10, pady=2)
+        
+        # Redo-Modus (redo_ocr=True)
+        self.redo_mode_radio = ttk.Radiobutton(
+            self.ocr_options_frame,
+            text="Redo OCR (Replace existing OCR text while preserving vector content)",
+            variable=self.ocr_mode_var,
+            value="redo"
+        )
+        self.redo_mode_radio.pack(anchor="w", padx=10, pady=2)
+        
+        # Info-Button für die OCR-Modi
+        self.ocr_info_button = ttk.Button(
+            self.ocr_options_frame,
+            text="ℹ️ Info",
+            command=self.show_ocr_info
+        )
+        self.ocr_info_button.pack(anchor="e", padx=10, pady=2)
+        
+        # Einstellungsrahmen für sonstige Optionen
+        self.options_frame = ttk.Frame(self)
+        self.options_frame.pack(fill=tk.X, padx=10, pady=5)
+        
         # Add parallel workers configuration
-        self.parallel_frame = ttk.Frame(self)
-        self.parallel_frame.pack(pady=5)
+        self.parallel_label = ttk.Label(self.options_frame, text="Parallel Workers:", font=("Segoe UI", 10))
+        self.parallel_label.pack(side=tk.LEFT, padx=5)
         
         # Get CPU count for max value (default to 8 if can't determine)
         max_workers = os.cpu_count() or 8
         
-        self.parallel_label = ttk.Label(self.parallel_frame, text="Parallel Workers:", font=("Segoe UI", 10))
-        self.parallel_label.pack(side=tk.LEFT, padx=5)
-        
         self.parallel_var = tk.IntVar(value=2)  # Default to 2 workers
         self.parallel_spinbox = ttk.Spinbox(
-            self.parallel_frame, 
+            self.options_frame, 
             from_=1, 
             to=max_workers,
             textvariable=self.parallel_var,
@@ -192,7 +235,7 @@ class OCRView(TkinterDnD.Tk):
 
         self.continue_on_error_var = tk.BooleanVar(value=True)  # Default to enabled
         self.continue_on_error_checkbox = ttk.Checkbutton(
-            self.parallel_frame, 
+            self.options_frame, 
             text="Continue on PDF rendering errors",
             variable=self.continue_on_error_var
         )
@@ -227,6 +270,71 @@ class OCRView(TkinterDnD.Tk):
             justify="center"
         )
         self.detailed_status_label.pack(fill=tk.X)
+
+    # Informationsfenster für OCR-Modi hinzufügen
+    def show_ocr_info(self):
+        """Show information about OCR modes."""
+        info_window = tk.Toplevel(self)
+        info_window.title("OCR Mode Information")
+        info_window.geometry("600x400")
+        
+        # Modal dialog
+        info_window.transient(self)
+        info_window.grab_set()
+        
+        # Scrollable text area
+        text_frame = ttk.Frame(info_window)
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(text_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Text widget
+        info_text = tk.Text(text_frame, wrap=tk.WORD, yscrollcommand=scrollbar.set)
+        info_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        scrollbar.config(command=info_text.yview)
+        
+        # Content
+        info_content = """
+    OCR MODES EXPLAINED
+
+    1. AUTO MODE (Default)
+    - Only applies OCR to pages without existing text
+    - Leaves existing text intact
+    - Best for: New scans or mixed documents (some digital, some scanned)
+    - Benefits: Faster processing, preserves existing text quality
+    - Limitations: Will not improve existing poor-quality OCR text
+
+    2. FORCE OCR MODE
+    - Rasterizes ALL pages and applies OCR everywhere
+    - Replaces ALL existing text with new OCR
+    - Best for: Bad scans or documents with problematic existing text
+    - Benefits: Ensures consistent OCR throughout the document
+    - Limitations: Increases file size, may reduce quality of vector content, slower processing
+
+    3. REDO OCR MODE
+    - Replaces only the existing OCR text layer
+    - Preserves vector content and document appearance
+    - Best for: Documents with existing poor-quality OCR that need improvement
+    - Benefits: Improves searchability without changing appearance
+    - Limitations: Incompatible with image processing options, may not work with all PDF types
+
+    WHEN TO USE EACH MODE?
+
+    - For born-digital PDFs (e.g., exported from Word): AUTO mode
+    - For new scans without OCR: AUTO or FORCE mode
+    - For documents with existing poor OCR: REDO mode
+    - For problematic PDFs with errors: FORCE mode (as a last resort)
+    """
+        
+        info_text.insert(tk.END, info_content)
+        info_text.config(state=tk.DISABLED)  # Read-only
+        
+        # OK button
+        ok_button = ttk.Button(info_window, text="OK", command=info_window.destroy)
+        ok_button.pack(pady=10)
     
     def _create_notebook_section(self):
         """Create the notebook with tabs for next, completed, total completed PDFs and logs."""
@@ -486,7 +594,8 @@ class OCRView(TkinterDnD.Tk):
             # Update parameters from UI
             self.viewmodel.max_workers = self.parallel_var.get()
             self.viewmodel.set_overwrite_source(self.overwrite_var.get())
-            self.viewmodel.continue_on_error = self.continue_on_error_var.get()  # Add this line
+            self.viewmodel.continue_on_error = self.continue_on_error_var.get()
+            self.viewmodel.ocr_mode = self.ocr_mode_var.get()  # OCR-Modus hinzufügen
             
             success = self.viewmodel.start_ocr()
             if success:

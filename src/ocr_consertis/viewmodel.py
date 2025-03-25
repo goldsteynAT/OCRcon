@@ -27,8 +27,9 @@ class OCRViewModel:
         self.deskew = True
         self.jobs = 4
         self.max_workers = 2  # Default parallel workers
-        self.overwrite_source = False  # Neues Flag für Quellüberschreibung
+        self.overwrite_source = False
         self.continue_on_error = True
+        self.ocr_mode = "auto"  # OCR-Modus hinzufügen (auto, force, redo
         
         # Thread for OCR processing
         self.ocr_thread = None
@@ -217,7 +218,8 @@ class OCRViewModel:
             deskew=self.deskew,
             jobs=self.jobs,
             max_workers=self.max_workers,
-            continue_on_error=self.continue_on_error,  # Pass the new parameter
+            continue_on_error=self.continue_on_error,
+            ocr_mode=self.ocr_mode,  # OCR-Modus hinzufügen
             status_callback=status_callback
         )
         
