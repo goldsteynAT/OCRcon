@@ -293,6 +293,32 @@ class OCRView(TkinterDnD.Tk):
                                                     text="Total number of completed PDFs (all sessions): 0", 
                                                     font=("Segoe UI", 10))
         self.total_completed_status_label.pack(fill=tk.X, padx=5, pady=(5, 0))
+
+        # Skipped PDFs
+        self.failed_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.failed_frame, text="Skipped")
+        
+        self.failed_status_label = ttk.Label(self.failed_frame, 
+                                        text="Number of skipped PDFs: 0", 
+                                        font=("Segoe UI", 10))
+        self.failed_status_label.pack(fill=tk.X, padx=5, pady=(5, 0))
+        
+        # Create a frame to contain the tree and scrollbar for proper layout
+        self.failed_tree_container = ttk.Frame(self.failed_frame)
+        self.failed_tree_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Add scrollbar first (right side)
+        self.failed_scrollbar = ttk.Scrollbar(self.failed_tree_container, orient=tk.VERTICAL)
+        self.failed_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Add tree with attached scrollbar
+        self.failed_tree = ttk.Treeview(self.failed_tree_container, columns=("File",), show="tree",
+                                    yscrollcommand=self.failed_scrollbar.set)
+        self.failed_tree.column("#0", width=800, minwidth=400, stretch=True)
+        self.failed_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Connect scrollbar to tree
+        self.failed_scrollbar.config(command=self.failed_tree.yview)
         
         # Create a frame to contain the tree and scrollbar for proper layout
         self.total_completed_tree_container = ttk.Frame(self.total_completed_frame)
@@ -381,6 +407,21 @@ class OCRView(TkinterDnD.Tk):
             # Insert all processed PDFs (global)
             for pdf in self.viewmodel.model.global_processed:
                 self.total_completed_tree.insert("", tk.END, iid=pdf, text=pdf)
+
+        elif current_tab == 3:  # Failed tab (assuming it's the 4th tab)
+        # Update the "Failed" tab content
+            failed_count = len(self.viewmodel.model.current_failed_pdfs)
+            self.failed_status_label.config(
+                text=f"Number of skipped PDFs: {failed_count}"
+            )
+            
+            # Clear and rebuild the tree
+            for item in self.failed_tree.get_children():
+                self.failed_tree.delete(item)
+                
+            # Insert failed PDFs
+            for pdf in self.viewmodel.model.current_failed_pdfs:
+                self.failed_tree.insert("", tk.END, iid=pdf, text=pdf)
     
     def _create_log_section(self):
         """Create the log output section."""
@@ -616,10 +657,46 @@ class OCRView(TkinterDnD.Tk):
                 self.total_completed_tree.yview_moveto(scroll_pos[0])
             except:
                 pass
+
         
-        # Calculate progress based on completed + in_progress
+        
+        if current_tab == 3:  # Failed tab is at index 3
+            # Save scroll position
+            try:
+                scroll_pos = self.failed_tree.yview()
+            except:
+                scroll_pos = (0, 1)
+                
+            failed_count = len(self.viewmodel.model.current_failed_pdfs)
+            self.failed_status_label.config(
+                text=f"Number of skipped PDFs: {failed_count}"
+            )
+            
+            # Efficiently update the tree without complete rebuild
+            existing_items = set(self.failed_tree.get_children())
+            new_items = set(self.viewmodel.model.current_failed_pdfs)
+            
+            # Remove items that are no longer in the list
+            for item in existing_items:
+                if item not in new_items:
+                    self.failed_tree.delete(item)
+            
+            # Add only new items
+            for file in self.viewmodel.model.current_failed_pdfs:
+                if file not in existing_items:
+                    self.failed_tree.insert("", tk.END, iid=file, text=file)
+                    
+            # Restore scroll position
+            self.failed_tree.update_idletasks()
+            try:
+                self.failed_tree.yview_moveto(scroll_pos[0])
+            except:
+                pass
+        
+        # When calculating progress, include both successfully processed and failed PDFs
         if total > 0:
             in_progress_count = len(current) if isinstance(current, list) else (1 if current else 0)
+            # current_index already includes both processed and failed (from the callback)
             progress = ((current_index) / total * 100)
             self.progress['value'] = min(progress, 100)  # Ensure we don't exceed 100%
         

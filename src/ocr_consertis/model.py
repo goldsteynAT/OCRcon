@@ -14,11 +14,13 @@ class OCRModel:
     """Model class handling the OCR processing and status management."""
     
     def __init__(self):
+    # Existing code...
         self.project_root = os.path.dirname(os.path.abspath(__file__))
         self.logs_dir = os.path.join(self.project_root, "logs")
         os.makedirs(self.logs_dir, exist_ok=True)
         self.global_status_file = os.path.join(self.logs_dir, "ocr_status.json")
         self.current_status_file = os.path.join(self.logs_dir, "ocr_status_current.json")
+        self.failed_status_file = os.path.join(self.logs_dir, "ocr_failed.json")  # New file for failed PDFs
         
         # Neues Flag für Quellüberschreibung
         self.overwrite_source = False
@@ -35,9 +37,13 @@ class OCRModel:
         # This should only contain PDFs processed in the current session
         self.processed_pdfs = []
         
+        # Initialize list for failed PDFs
+        self.failed_pdfs = self.load_status(self.failed_status_file) or []
+        self.current_failed_pdfs = []  # Failed in current session
+        
         # Clear the current session file on startup
         self.save_status(self.current_status_file, [])
-        
+            
         # Time tracking variables
         self.start_time = None
         self.pause_time = None
@@ -83,7 +89,21 @@ class OCRModel:
             # Save both status files
             self.save_status(self.global_status_file, self.global_processed)
             self.save_status(self.current_status_file, self.processed_pdfs)
-    
+
+    def update_failed_status(self, failed_pdf: str) -> None:
+        """Update the failed PDFs list with a new failed PDF."""
+        with self.processing_lock:
+            # Add to current session failed list
+            if failed_pdf not in self.current_failed_pdfs:
+                self.current_failed_pdfs.append(failed_pdf)
+            
+            # Add to global failed list
+            if failed_pdf not in self.failed_pdfs:
+                self.failed_pdfs.append(failed_pdf)
+            
+            # Save failed status file
+            self.save_status(self.failed_status_file, self.failed_pdfs)
+        
     def collect_pdfs(self, input_folders: List[str]) -> List[str]:
         """Collect all PDF files from input folders."""
         pdf_files = []
@@ -98,8 +118,8 @@ class OCRModel:
     def get_unprocessed_pdfs(self, input_folders: List[str]) -> List[str]:
         """Collect all unprocessed PDF files from input folders."""
         all_pdfs = self.collect_pdfs(input_folders)
-        # Filter out PDFs that have already been processed (in global list)
-        return [pdf for pdf in all_pdfs if pdf not in self.global_processed]
+        # Filter out PDFs that have already been processed or failed (in global lists)
+        return [pdf for pdf in all_pdfs if pdf not in self.global_processed and pdf not in self.failed_pdfs]
     
     def apply_ocr_to_pdf(self, input_pdf: str, output_pdf: str, use_gpu: bool = False, 
                          language: str = "deu+eng", deskew: bool = True, jobs: int = 1) -> bool:
@@ -156,8 +176,11 @@ class OCRModel:
         
         # Filter to include only PDFs in the current input folders that have been processed
         relevant_processed = [pdf for pdf in self.global_processed 
-                             if self.is_pdf_in_input_folders(pdf, input_folders)]
-        processed_count = len(relevant_processed)
+                            if self.is_pdf_in_input_folders(pdf, input_folders)]
+        relevant_failed = [pdf for pdf in self.failed_pdfs
+                        if self.is_pdf_in_input_folders(pdf, input_folders)]
+        
+        processed_count = len(relevant_processed) + len(relevant_failed)
         
         to_be_processed = total - processed_count
         return total, to_be_processed
@@ -305,9 +328,9 @@ class OCRModel:
         return output_pdf
     
     def _process_pdfs_parallel(self, unprocessed_pdfs: List[str], input_folders: List[str], 
-                         output_dir: str, use_gpu: bool, language: str, deskew: bool, 
-                         jobs: int, max_workers: int, status_callback: Optional[Callable], 
-                         total: int) -> None:
+                     output_dir: str, use_gpu: bool, language: str, deskew: bool, 
+                     jobs: int, max_workers: int, status_callback: Optional[Callable], 
+                     total: int) -> None:
         """Process PDFs in parallel using ProcessPoolExecutor."""
         print(f"Starting parallel processing with {max_workers} workers")
         
@@ -385,11 +408,18 @@ class OCRModel:
                         if input_pdf in self.in_progress_pdfs:
                             self.in_progress_pdfs.remove(input_pdf)
                     
-                    # Bei Erfolg Datei als verarbeitet markieren
                     if success:
+                        # Bei Erfolg Datei als verarbeitet markieren
                         self.update_status_files(input_pdf)
                         with self.processing_lock:
                             self.processing_times.append(processing_time)
+                    else:
+                        # Bei Fehler zur Liste fehlgeschlagener PDFs hinzufügen
+                        self.update_failed_status(input_pdf)
+                        # Optional: Auch bei Fehlern Verarbeitungszeit speichern, da es Zeit verbraucht hat
+                        if processing_time > 0:
+                            with self.processing_lock:
+                                self.processing_times.append(processing_time)
                     
                     # Entferne aus futures_dict
                     del futures_dict[future]
@@ -406,12 +436,13 @@ class OCRModel:
                 if status_callback and not self.paused:
                     with self.processing_lock:
                         in_progress_copy = self.in_progress_pdfs.copy()
+                        failed_copy = self.current_failed_pdfs.copy()
                     remaining = [p[0] for p in job_params[next_job_idx:]]
                     status_callback(
                         self.processed_pdfs.copy(),
                         in_progress_copy,
                         remaining,
-                        len(self.processed_pdfs),
+                        len(self.processed_pdfs) + len(self.current_failed_pdfs),  # Count both success and failed
                         total
                     )
         
@@ -457,3 +488,4 @@ class OCRModel:
         # Clear the current session file
         self.save_status(self.current_status_file, [])
         self.processed_pdfs = []
+        self.current_failed_pdfs = []  # Reset current session failed PDFs

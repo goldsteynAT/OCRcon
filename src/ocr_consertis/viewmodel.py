@@ -197,7 +197,7 @@ class OCRViewModel:
     def _run_ocr_process(self) -> None:
         """Run the OCR process in a thread."""
         def status_callback(completed, current, next_items, current_index, total):
-            # Calculate progress percentage
+            # Calculate progress percentage (current_index now includes failed PDFs)
             progress = (current_index / total * 100) if total > 0 else 0
             # Notify about status update
             self.notify_status_update(completed, current, next_items, current_index, total)

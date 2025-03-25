@@ -220,13 +220,18 @@ class OCRModel:
         return elapsed_time, avg_time_per_pdf, estimated_time_remaining
     
     def start_ocr_process(self, input_folders: List[str], output_dir: str, 
-                        use_gpu: bool = False, language: str = "deu+eng", 
-                        deskew: bool = True, jobs: int = 1,
-                        max_workers: int = 2,  # New parameter for parallel processing
-                        status_callback: Optional[Callable] = None) -> None:
+                    use_gpu: bool = False, language: str = "deu+eng", 
+                    deskew: bool = True, jobs: int = 1,
+                    max_workers: int = 2,  # New parameter for parallel processing
+                    status_callback: Optional[Callable] = None) -> None:
         """Start the OCR process for all PDFs in the input folders with parallel processing."""
-        if not input_folders or not output_dir:
-            print("Please select at least one input folder and an output folder.")
+        # Geänderte Prüfung, die overwrite_source berücksichtigt
+        if not input_folders:
+            print("Please select at least one input folder.")
+            return
+            
+        if not self.overwrite_source and not output_dir:
+            print("Please select an output folder or enable 'Overwrite source files'.")
             return
         
         self.running = True
@@ -255,7 +260,7 @@ class OCRModel:
             with self.processing_lock:
                 in_progress_copy = self.in_progress_pdfs.copy()
             status_callback(self.processed_pdfs.copy(), in_progress_copy, 
-                           unprocessed_pdfs, len(self.processed_pdfs), total)
+                        unprocessed_pdfs, len(self.processed_pdfs), total)
         
         # If no PDFs to process
         if not unprocessed_pdfs:
@@ -269,7 +274,7 @@ class OCRModel:
         processing_thread = threading.Thread(
             target=self._process_pdfs_parallel,
             args=(unprocessed_pdfs, input_folders, output_dir, use_gpu, language, 
-                 deskew, jobs, max_workers, status_callback, total)
+                deskew, jobs, max_workers, status_callback, total)
         )
         processing_thread.daemon = True
         processing_thread.start()
