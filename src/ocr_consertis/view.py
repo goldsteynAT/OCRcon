@@ -174,8 +174,9 @@ class OCRView(TkinterDnD.Tk):
         self.ocr_options_frame = ttk.LabelFrame(self, text="OCR Mode")
         self.ocr_options_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        # OCR-Modus-Variable
+        # OCR-Modus-Variable mit Callback
         self.ocr_mode_var = tk.StringVar(value="auto")  # Default: auto
+        self.ocr_mode_var.trace_add("write", self.on_ocr_mode_change)  # Callback hinzufügen
         
         # Auto-Modus (skip_text=True)
         self.auto_mode_radio = ttk.Radiobutton(
@@ -271,6 +272,33 @@ class OCRView(TkinterDnD.Tk):
         )
         self.detailed_status_label.pack(fill=tk.X)
 
+    def on_ocr_mode_change(self, *args):
+        """Handle changes to the OCR mode."""
+        selected_mode = self.ocr_mode_var.get()
+        
+        # Bei Redo-Modus visuelles Feedback geben, dass Bildverarbeitung deaktiviert ist
+        if selected_mode == "redo":
+            # Optional: Hier könnte man Bildverarbeitungs-Checkboxen deaktivieren, 
+            # wenn welche vorhanden wären
+            
+            # Warnhinweis anzeigen
+            warning_text = "⚠️ Redo mode: Image processing options disabled."
+            if not hasattr(self, 'redo_warning_label'):
+                self.redo_warning_label = ttk.Label(
+                    self.ocr_options_frame, 
+                    text=warning_text,
+                    foreground="orange",
+                    font=("Segoe UI", 9, "italic")
+                )
+                self.redo_warning_label.pack(anchor="w", padx=30, pady=(0, 5))
+            else:
+                self.redo_warning_label.config(text=warning_text)
+                self.redo_warning_label.pack(anchor="w", padx=30, pady=(0, 5))
+        else:
+            # Warnhinweis verstecken, wenn er existiert
+            if hasattr(self, 'redo_warning_label'):
+                self.redo_warning_label.pack_forget()
+
     # Informationsfenster für OCR-Modi hinzufügen
     def show_ocr_info(self):
         """Show information about OCR modes."""
@@ -306,6 +334,7 @@ class OCRView(TkinterDnD.Tk):
     - Best for: New scans or mixed documents (some digital, some scanned)
     - Benefits: Faster processing, preserves existing text quality
     - Limitations: Will not improve existing poor-quality OCR text
+    - Compatibility: Works with all image processing options
 
     2. FORCE OCR MODE
     - Rasterizes ALL pages and applies OCR everywhere
@@ -313,13 +342,15 @@ class OCRView(TkinterDnD.Tk):
     - Best for: Bad scans or documents with problematic existing text
     - Benefits: Ensures consistent OCR throughout the document
     - Limitations: Increases file size, may reduce quality of vector content, slower processing
+    - Compatibility: Works with all image processing options
 
     3. REDO OCR MODE
     - Replaces only the existing OCR text layer
     - Preserves vector content and document appearance
     - Best for: Documents with existing poor-quality OCR that need improvement
     - Benefits: Improves searchability without changing appearance
-    - Limitations: Incompatible with image processing options, may not work with all PDF types
+    - Limitations: Incompatible with image processing options (deskew, etc.)
+    - Compatibility: ⚠️ NOT compatible with deskew or other image processing features!
 
     WHEN TO USE EACH MODE?
 
@@ -327,6 +358,11 @@ class OCRView(TkinterDnD.Tk):
     - For new scans without OCR: AUTO or FORCE mode
     - For documents with existing poor OCR: REDO mode
     - For problematic PDFs with errors: FORCE mode (as a last resort)
+
+    ⚠️ IMPORTANT NOTE ABOUT REDO MODE:
+    When REDO mode is selected, image processing options like deskew will be automatically 
+    disabled, as they are incompatible with this mode. REDO mode is meant to replace only 
+    the text layer while preserving the exact appearance of the document.
     """
         
         info_text.insert(tk.END, info_content)

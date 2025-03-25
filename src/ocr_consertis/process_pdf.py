@@ -30,7 +30,6 @@ def process_pdf(params):
         # Basis-OCR-Optionen
         ocr_options = {
             "language": language,
-            "deskew": deskew,
             "jobs": jobs,
             "continue_on_soft_render_error": continue_on_error
         }
@@ -38,14 +37,23 @@ def process_pdf(params):
         # OCR-Modus-spezifische Optionen
         if ocr_mode == "auto":
             ocr_options["skip_text"] = True
+            # Bildverarbeitungsoptionen nur aktivieren, wenn nicht im redo-Modus
+            if deskew:
+                ocr_options["deskew"] = True
         elif ocr_mode == "force":
             ocr_options["force_ocr"] = True
+            # Bildverarbeitungsoptionen nur aktivieren, wenn nicht im redo-Modus
+            if deskew:
+                ocr_options["deskew"] = True
         elif ocr_mode == "redo":
             ocr_options["redo_ocr"] = True
+            # WICHTIG: Bei redo_ocr KEINE Bildverarbeitungsoptionen verwenden
+            # deskew, clean-final, remove-background etc. werden ignoriert
+            print(f"ℹ️ Redo OCR mode: Image processing options like deskew disabled for {input_pdf}")
         
         # GPU-spezifische Optionen, falls notwendig
         if use_gpu:
-            # Bei GPU-Nutzung force_ocr immer aktivieren
+            # Bei GPU-Nutzung force_ocr immer aktivieren, außer im redo-Modus
             if ocr_mode != "redo":  # Redo-Modus mit force_ocr ist inkompatibel
                 ocr_options["force_ocr"] = True
         
