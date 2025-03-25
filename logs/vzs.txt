@@ -4,6 +4,8 @@ OCR_Consertis/
 │   image.png
 │   pyproject.toml
 │   requirements.txt
+│   ├───.roo/
+│   │   system-prompt-codershortrules
 │   ├───logs/
 │   │   #export_project.py
 │   │   all.txt

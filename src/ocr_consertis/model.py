@@ -102,7 +102,8 @@ class OCRModel:
         return [pdf for pdf in all_pdfs if pdf not in self.global_processed]
     
     def apply_ocr_to_pdf(self, input_pdf: str, output_pdf: str, use_gpu: bool = False, 
-                         language: str = "deu+eng", deskew: bool = True, jobs: int = 1) -> bool:
+                     language: str = "deu+eng", deskew: bool = True, jobs: int = 1,
+                     continue_on_error: bool = True) -> bool:
         """Apply OCR to a PDF file and return success status."""
         pdf_start_time = time.time()
         try:
@@ -113,7 +114,8 @@ class OCRModel:
                     language=language,
                     force_ocr=True,
                     deskew=deskew,
-                    jobs=jobs
+                    jobs=jobs,
+                    continue_on_soft_render_error=continue_on_error
                 )
             else:
                 ocrmypdf.ocr(
@@ -122,7 +124,8 @@ class OCRModel:
                     language=language,
                     skip_text=True,
                     deskew=deskew,
-                    jobs=jobs
+                    jobs=jobs,
+                    continue_on_soft_render_error=continue_on_error
                 )
             print(f"✅ OCR applied: {input_pdf} -> {output_pdf}")
             
@@ -207,10 +210,11 @@ class OCRModel:
         return elapsed_time, avg_time_per_pdf, estimated_time_remaining
     
     def start_ocr_process(self, input_folders: List[str], output_dir: str, 
-                    use_gpu: bool = False, language: str = "deu+eng", 
-                    deskew: bool = True, jobs: int = 1,
-                    max_workers: int = 2,  # New parameter for parallel processing
-                    status_callback: Optional[Callable] = None) -> None:
+                use_gpu: bool = False, language: str = "deu+eng", 
+                deskew: bool = True, jobs: int = 1,
+                max_workers: int = 2,
+                continue_on_error: bool = True,  # New parameter
+                status_callback: Optional[Callable] = None) -> None:
         """Start the OCR process for all PDFs in the input folders with parallel processing."""
         # Geänderte Prüfung, die overwrite_source berücksichtigt
         if not input_folders:
@@ -261,7 +265,7 @@ class OCRModel:
         processing_thread = threading.Thread(
             target=self._process_pdfs_parallel,
             args=(unprocessed_pdfs, input_folders, output_dir, use_gpu, language, 
-                deskew, jobs, max_workers, status_callback, total)
+                deskew, jobs, max_workers, continue_on_error, status_callback, total)  # Add continue_on_error here
         )
         processing_thread.daemon = True
         processing_thread.start()
@@ -305,9 +309,10 @@ class OCRModel:
         return output_pdf
     
     def _process_pdfs_parallel(self, unprocessed_pdfs: List[str], input_folders: List[str], 
-                         output_dir: str, use_gpu: bool, language: str, deskew: bool, 
-                         jobs: int, max_workers: int, status_callback: Optional[Callable], 
-                         total: int) -> None:
+                     output_dir: str, use_gpu: bool, language: str, deskew: bool, 
+                     jobs: int, max_workers: int, continue_on_error: bool,  # Add parameter here
+                     status_callback: Optional[Callable], 
+                     total: int) -> None:
         """Process PDFs in parallel using ProcessPoolExecutor."""
         print(f"Starting parallel processing with {max_workers} workers")
         
@@ -328,7 +333,8 @@ class OCRModel:
             pdf_to_output[input_pdf] = output_pdf
             
             # Erstelle Parameter für den Job - füge overwrite_source Flag hinzu
-            job_params.append((input_pdf, output_pdf, use_gpu, language, deskew, jobs, self.overwrite_source))
+            job_params.append((input_pdf, output_pdf, use_gpu, language, deskew, jobs, self.overwrite_source, continue_on_error))
+
         
         # Erstelle Futures-Dictionary zur Verfolgung der Aufträge
         futures_dict = {}

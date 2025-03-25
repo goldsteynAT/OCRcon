@@ -115,7 +115,8 @@ class OCRModel:
         return [pdf for pdf in all_pdfs if pdf not in self.global_processed]
     
     def apply_ocr_to_pdf(self, input_pdf: str, output_pdf: str, use_gpu: bool = False, 
-                         language: str = "deu+eng", deskew: bool = True, jobs: int = 1) -> bool:
+                     language: str = "deu+eng", deskew: bool = True, jobs: int = 1,
+                     continue_on_error: bool = True) -> bool:
         """Apply OCR to a PDF file and return success status."""
         pdf_start_time = time.time()
         try:
@@ -126,7 +127,8 @@ class OCRModel:
                     language=language,
                     force_ocr=True,
                     deskew=deskew,
-                    jobs=jobs
+                    jobs=jobs,
+                    continue_on_soft_render_error=continue_on_error
                 )
             else:
                 ocrmypdf.ocr(
@@ -135,7 +137,8 @@ class OCRModel:
                     language=language,
                     skip_text=True,
                     deskew=deskew,
-                    jobs=jobs
+                    jobs=jobs,
+                    continue_on_soft_render_error=continue_on_error
                 )
             print(f"✅ OCR applied: {input_pdf} -> {output_pdf}")
             
@@ -220,13 +223,19 @@ class OCRModel:
         return elapsed_time, avg_time_per_pdf, estimated_time_remaining
     
     def start_ocr_process(self, input_folders: List[str], output_dir: str, 
-                        use_gpu: bool = False, language: str = "deu+eng", 
-                        deskew: bool = True, jobs: int = 1,
-                        max_workers: int = 2,  # New parameter for parallel processing
-                        status_callback: Optional[Callable] = None) -> None:
+                use_gpu: bool = False, language: str = "deu+eng", 
+                deskew: bool = True, jobs: int = 1,
+                max_workers: int = 2,
+                continue_on_error: bool = True,  # New parameter
+                status_callback: Optional[Callable] = None) -> None:
         """Start the OCR process for all PDFs in the input folders with parallel processing."""
-        if not input_folders or not output_dir:
-            print("Please select at least one input folder and an output folder.")
+        # Geänderte Prüfung, die overwrite_source berücksichtigt
+        if not input_folders:
+            print("Please select at least one input folder.")
+            return
+            
+        if not self.overwrite_source and not output_dir:
+            print("Please select an output folder or enable 'Overwrite source files'.")
             return
         
         self.running = True
@@ -255,7 +264,7 @@ class OCRModel:
             with self.processing_lock:
                 in_progress_copy = self.in_progress_pdfs.copy()
             status_callback(self.processed_pdfs.copy(), in_progress_copy, 
-                           unprocessed_pdfs, len(self.processed_pdfs), total)
+                        unprocessed_pdfs, len(self.processed_pdfs), total)
         
         # If no PDFs to process
         if not unprocessed_pdfs:
@@ -269,7 +278,7 @@ class OCRModel:
         processing_thread = threading.Thread(
             target=self._process_pdfs_parallel,
             args=(unprocessed_pdfs, input_folders, output_dir, use_gpu, language, 
-                 deskew, jobs, max_workers, status_callback, total)
+                deskew, jobs, max_workers, status_callback, total)
         )
         processing_thread.daemon = True
         processing_thread.start()
@@ -336,7 +345,8 @@ class OCRModel:
             pdf_to_output[input_pdf] = output_pdf
             
             # Erstelle Parameter für den Job - füge overwrite_source Flag hinzu
-            job_params.append((input_pdf, output_pdf, use_gpu, language, deskew, jobs, self.overwrite_source))
+            job_params.append((input_pdf, output_pdf, use_gpu, language, deskew, jobs, self.overwrite_source, continue_on_error))
+
         
         # Erstelle Futures-Dictionary zur Verfolgung der Aufträge
         futures_dict = {}
@@ -481,7 +491,7 @@ def process_pdf(params):
     Verarbeitet ein einzelnes PDF-Dokument mit OCR.
     
     Args:
-        params: Tuple (input_pdf, output_pdf, use_gpu, language, deskew, jobs, overwrite_source)
+        params: Tuple (input_pdf, output_pdf, use_gpu, language, deskew, jobs, overwrite_source, continue_on_error)
     
     Returns:
         Tuple (input_pdf, success, processing_time)
@@ -491,8 +501,8 @@ def process_pdf(params):
     import time
     import ocrmypdf
     
-    # Unpack parameters, include overwrite_source flag
-    input_pdf, output_pdf, use_gpu, language, deskew, jobs, overwrite_source = params
+    # Unpack parameters, include new continue_on_error flag
+    input_pdf, output_pdf, use_gpu, language, deskew, jobs, overwrite_source, continue_on_error = params
     start_time = time.time()
     
     try:
@@ -503,7 +513,8 @@ def process_pdf(params):
                 language=language,
                 force_ocr=True,
                 deskew=deskew,
-                jobs=jobs
+                jobs=jobs,
+                continue_on_soft_render_error=continue_on_error
             )
         else:
             ocrmypdf.ocr(
@@ -512,7 +523,8 @@ def process_pdf(params):
                 language=language,
                 skip_text=True,
                 deskew=deskew,
-                jobs=jobs
+                jobs=jobs,
+                continue_on_soft_render_error=continue_on_error
             )
             
         # Wenn Quelldateien überschrieben werden sollen und Ausgabe erfolgreich war
@@ -727,6 +739,14 @@ class OCRView(TkinterDnD.Tk):
             width=5
         )
         self.parallel_spinbox.pack(side=tk.LEFT, padx=5)
+
+        self.continue_on_error_var = tk.BooleanVar(value=True)  # Default to enabled
+        self.continue_on_error_checkbox = ttk.Checkbutton(
+            self.parallel_frame, 
+            text="Continue on PDF rendering errors",
+            variable=self.continue_on_error_var
+        )
+        self.continue_on_error_checkbox.pack(side=tk.RIGHT, padx=10)
         
         # Control elements (Start, Pause, Resume)
         self.control_frame = ttk.Frame(self, style="TFrame")
@@ -1013,11 +1033,10 @@ class OCRView(TkinterDnD.Tk):
     def start_ocr(self):
         """Handle start OCR button click."""
         if not self.viewmodel.is_running():
-            # Update max_workers from UI
+            # Update parameters from UI
             self.viewmodel.max_workers = self.parallel_var.get()
-            
-            # Update overwrite_source from UI (Sicherheitshalber)
             self.viewmodel.set_overwrite_source(self.overwrite_var.get())
+            self.viewmodel.continue_on_error = self.continue_on_error_var.get()  # Add this line
             
             success = self.viewmodel.start_ocr()
             if success:
@@ -1291,6 +1310,7 @@ class OCRViewModel:
         self.jobs = 4
         self.max_workers = 2  # Default parallel workers
         self.overwrite_source = False  # Neues Flag für Quellüberschreibung
+        self.continue_on_error = True
         
         # Thread for OCR processing
         self.ocr_thread = None
@@ -1478,7 +1498,8 @@ class OCRViewModel:
             language=self.language,
             deskew=self.deskew,
             jobs=self.jobs,
-            max_workers=self.max_workers,  # Pass the parallelism parameter
+            max_workers=self.max_workers,
+            continue_on_error=self.continue_on_error,  # Pass the new parameter
             status_callback=status_callback
         )
         

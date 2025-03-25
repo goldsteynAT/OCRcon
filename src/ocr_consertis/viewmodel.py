@@ -28,6 +28,7 @@ class OCRViewModel:
         self.jobs = 4
         self.max_workers = 2  # Default parallel workers
         self.overwrite_source = False  # Neues Flag für Quellüberschreibung
+        self.continue_on_error = True
         
         # Thread for OCR processing
         self.ocr_thread = None
@@ -215,7 +216,8 @@ class OCRViewModel:
             language=self.language,
             deskew=self.deskew,
             jobs=self.jobs,
-            max_workers=self.max_workers,  # Pass the parallelism parameter
+            max_workers=self.max_workers,
+            continue_on_error=self.continue_on_error,  # Pass the new parameter
             status_callback=status_callback
         )
         

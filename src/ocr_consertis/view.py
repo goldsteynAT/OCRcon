@@ -189,6 +189,14 @@ class OCRView(TkinterDnD.Tk):
             width=5
         )
         self.parallel_spinbox.pack(side=tk.LEFT, padx=5)
+
+        self.continue_on_error_var = tk.BooleanVar(value=True)  # Default to enabled
+        self.continue_on_error_checkbox = ttk.Checkbutton(
+            self.parallel_frame, 
+            text="Continue on PDF rendering errors",
+            variable=self.continue_on_error_var
+        )
+        self.continue_on_error_checkbox.pack(side=tk.RIGHT, padx=10)
         
         # Control elements (Start, Pause, Resume)
         self.control_frame = ttk.Frame(self, style="TFrame")
@@ -475,11 +483,10 @@ class OCRView(TkinterDnD.Tk):
     def start_ocr(self):
         """Handle start OCR button click."""
         if not self.viewmodel.is_running():
-            # Update max_workers from UI
+            # Update parameters from UI
             self.viewmodel.max_workers = self.parallel_var.get()
-            
-            # Update overwrite_source from UI (Sicherheitshalber)
             self.viewmodel.set_overwrite_source(self.overwrite_var.get())
+            self.viewmodel.continue_on_error = self.continue_on_error_var.get()  # Add this line
             
             success = self.viewmodel.start_ocr()
             if success:

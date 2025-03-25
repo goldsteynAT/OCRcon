@@ -11,7 +11,7 @@ def process_pdf(params):
     Verarbeitet ein einzelnes PDF-Dokument mit OCR.
     
     Args:
-        params: Tuple (input_pdf, output_pdf, use_gpu, language, deskew, jobs, overwrite_source)
+        params: Tuple (input_pdf, output_pdf, use_gpu, language, deskew, jobs, overwrite_source, continue_on_error)
     
     Returns:
         Tuple (input_pdf, success, processing_time)
@@ -21,8 +21,8 @@ def process_pdf(params):
     import time
     import ocrmypdf
     
-    # Unpack parameters, include overwrite_source flag
-    input_pdf, output_pdf, use_gpu, language, deskew, jobs, overwrite_source = params
+    # Unpack parameters, include new continue_on_error flag
+    input_pdf, output_pdf, use_gpu, language, deskew, jobs, overwrite_source, continue_on_error = params
     start_time = time.time()
     
     try:
@@ -33,7 +33,8 @@ def process_pdf(params):
                 language=language,
                 force_ocr=True,
                 deskew=deskew,
-                jobs=jobs
+                jobs=jobs,
+                continue_on_soft_render_error=continue_on_error
             )
         else:
             ocrmypdf.ocr(
@@ -42,7 +43,8 @@ def process_pdf(params):
                 language=language,
                 skip_text=True,
                 deskew=deskew,
-                jobs=jobs
+                jobs=jobs,
+                continue_on_soft_render_error=continue_on_error
             )
             
         # Wenn Quelldateien überschrieben werden sollen und Ausgabe erfolgreich war
