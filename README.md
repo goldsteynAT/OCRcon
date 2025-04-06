@@ -1,8 +1,3 @@
-<p align="center">
-  <img src="https://github.com/goldsteynAT/OCRcon/blob/dev/logs/OCRcon_preview_schlagschatten_ws.png" alt="OCRcon Preview" width="800">
-</p>
-
-
 <h1 align="center">OCRcon</h1>
 <p align="center"><em>Connect. Control. Convert.</em></p>
 
@@ -32,6 +27,10 @@ It's ideal for teams and organizations managing large sets of documents. The too
 - 📘 Logging and status tracking across sessions  
 - 🌍 Multilingual OCR (default: **German** & **English**)  
 - 🧠 CPU & GPU processing support  
+
+<p align="center">
+  <img src="https://github.com/goldsteynAT/OCRcon/blob/dev/logs/OCRcon_preview_schlagschatten_ws.png" alt="OCRcon Preview" width="800">
+</p>
 
 ---
 
