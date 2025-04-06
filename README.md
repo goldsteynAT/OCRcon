@@ -1,6 +1,7 @@
 <p align="center">
-  <img src="https://github.com/goldsteynAT/OCRcon/blob/dev/logs/OCR_Convert_bg_rnd.png" alt="OCRcon Logo" width="800">
+  <img src="https://github.com/goldsteynAT/OCRcon/blob/dev/logs/OCRcon_preview_schlagschatten_ws.png" alt="OCRcon Preview" width="800">
 </p>
+
 
 <h1 align="center">OCRcon</h1>
 <p align="center"><em>Connect. Control. Convert.</em></p>
