@@ -28,8 +28,14 @@ It's ideal for teams and organizations managing large sets of documents. The too
 - 🌍 Multilingual OCR (default: **German** & **English**)  
 - 🧠 CPU & GPU processing support  
 
+---
+
+## 🖼️ User Interface Preview
+
+Here's a quick look at the OCRcon GUI in action:
+
 <p align="center">
-  <img src="https://github.com/goldsteynAT/OCRcon/blob/dev/logs/OCRcon_preview_schlagschatten_ws.png" alt="OCRcon Preview" width="800">
+  <img src="https://github.com/goldsteynAT/OCRcon/blob/dev/logs/OCRcon_preview_schlagschatten_ws.png" alt="OCRcon GUI Preview" width="500">
 </p>
 
 ---
