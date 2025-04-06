@@ -1,3 +1,4 @@
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/19260368-3693-41f0-a971-f69b7bc60aa0" alt="OCRcon GIF">
+  <img src="https://github.com/goldsteynAT/OCRcon/blob/dev/logs/OCR_Convert_bg_rnd.png" alt="OCRcon GIF">
 </p>
+
