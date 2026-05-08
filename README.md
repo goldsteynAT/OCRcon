@@ -3,34 +3,35 @@
 
 ---
 
-## 🔍 Overview
+## Overview
 
 **OCRcon** is a Python-based utility that converts scanned PDFs into searchable documents **while preserving layout and formatting**.
 
 Designed for efficiency and ease of use, OCRcon offers:
 
-- ✅ Drag-and-drop interface  
-- ✅ Parallel processing  
-- ✅ Real-time progress tracking  
+- Drag-and-drop interface  
+- Parallel processing  
+- Real-time progress tracking  
 
-It's ideal for teams and organizations managing large sets of documents. The tool maintains folder structures and provides detailed statistics to optimize your document workflows.
-
----
-
-## 🚀 Features
-
-- 📂 Multi-folder batch processing (structure preserved)  
-- ⚡ Parallel execution for faster results  
-- 📊 Real-time progress monitoring with time estimates  
-- ⏸️ Pause and resume long-running jobs  
-- 🔄 Option to overwrite source files  
-- 📘 Logging and status tracking across sessions  
-- 🌍 Multilingual OCR (default: **German** & **English**)  
-- 🧠 CPU & GPU processing support  
+It's ideal for teams and organizations managing large sets of documents. 
+The tool maintains folder structures and provides detailed statistics to optimize your document workflows.
 
 ---
 
-## 🖼️ User Interface Preview
+## Features
+
+- Multi-folder batch processing (structure preserved)  
+- Parallel execution for faster results  
+- Real-time progress monitoring with time estimates  
+- Pause and resume long-running jobs  
+- Option to overwrite source files  
+- Logging and status tracking across sessions  
+- Multilingual OCR (default: **German** & **English**)  
+- CPU & GPU processing support  
+
+---
+
+## User Interface Preview
 
 Here's a quick look at the OCRcon GUI in action:
 
@@ -40,7 +41,7 @@ Here's a quick look at the OCRcon GUI in action:
 
 ---
 
-## 🛠️ Installation
+## Installation
 
 1. Clone the repository:
    ```bash
